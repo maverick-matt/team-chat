@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin – Maverick Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#111111;--sur:#1e1e1e;--brd:#2a2a2a;--amb:#008ced;--amb-h:#0d7ec9;--txt:#F5F5F5;--mut:#6B7280;--err:#EF4444;--grn:#10B981;--blu:#3B82F6}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+.topbar{background:#111318;border-bottom:1px solid var(--brd);padding:0 32px;height:54px;display:flex;align-items:center;justify-content:space-between}
+.btn{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;padding:7px 14px;border-radius:7px;cursor:pointer;border:none;transition:opacity .15s}
+.btn:hover{opacity:.85}.btn-amb{background:var(--amb);color:#fff}.btn-ghost{background:var(--sur);color:var(--txt);border:1px solid var(--brd)}
+.btn-danger{background:rgba(239,68,68,.15);color:var(--err);border:1px solid rgba(239,68,68,.3)}
+.btn-blue{background:rgba(59,130,246,.15);color:var(--blu);border:1px solid rgba(59,130,246,.3)}
+.btn-sm{padding:5px 10px;font-size:11px}
+.container{max-width:1100px;margin:0 auto;padding:32px 24px}
+h1{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;margin-bottom:4px}
+.page-sub{color:var(--mut);font-size:13px;margin-bottom:28px}
+.tabs{display:flex;gap:3px;margin-bottom:24px;background:var(--sur);border-radius:10px;padding:4px;border:1px solid var(--brd);flex-wrap:wrap}
+.tab{padding:7px 16px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;color:var(--mut);transition:all .15s;white-space:nowrap}
+.tab.active{background:var(--amb);color:#fff}
+.card{background:var(--sur);border:1px solid var(--brd);border-radius:14px;overflow:hidden;margin-bottom:20px}
+.card-head{padding:14px 20px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.card-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700}
+.card-actions{display:flex;gap:8px;align-items:center}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);font-weight:500;padding:10px 20px;text-align:left}
+td{padding:10px 20px;font-size:13px;border-top:1px solid var(--brd)}
+tr:hover td{background:rgba(255,255,255,.02)}
+.avatar{width:28px;height:28px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.role-badge,.status-badge{font-size:10px;padding:2px 7px;border-radius:5px;font-weight:500}
+.role-admin{background:rgba(0,140,237,.15);color:var(--amb)}.role-manager{background:rgba(16,185,129,.15);color:var(--grn)}.role-member{background:rgba(107,114,128,.15);color:var(--mut)}
+.badge-grn{background:rgba(16,185,129,.15);color:var(--grn)}.badge-mut{background:rgba(107,114,128,.15);color:var(--mut)}
+.badge-red{background:rgba(239,68,68,.15);color:var(--err)}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;align-items:center;justify-content:center}
+.overlay.show{display:flex}
+.modal{background:var(--sur);border:1px solid var(--brd);border-radius:16px;padding:26px;width:500px;max-width:95vw;max-height:90vh;overflow-y:auto}
+.modal-wide{width:680px}
+.modal h2{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:16px}
+label{display:block;font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;margin-top:12px;font-weight:500}
+label:first-child{margin-top:0}
+input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--brd);border-radius:8px;color:var(--txt);font-family:'DM Sans';font-size:13px;padding:9px 12px;outline:none;transition:border-color .2s}
+input:focus,select:focus,textarea:focus{border-color:var(--amb)}select option{background:var(--bg)}
+textarea{resize:vertical;min-height:80px;line-height:1.5}
+.modal-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--sur);border:1px solid var(--brd);color:var(--txt);padding:10px 18px;border-radius:10px;font-size:12px;z-index:999;display:none}
+.toast.ok{border-color:var(--grn)}.toast.err{border-color:var(--err);color:var(--err)}
+.panel{display:none}.panel.active{display:block}
+.empty-row td{text-align:center;color:var(--mut);padding:28px}
+.store-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(59,130,246,.1);color:var(--blu);border:1px solid rgba(59,130,246,.2);border-radius:5px;padding:2px 7px;font-size:11px;margin:1px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-row .full{grid-column:1/-1}
+/* Table scroll wrapper */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl-wrap table{min-width:520px}
+
+/* Form builder */
+.fb-field{background:var(--bg);border:1px solid var(--brd);border-radius:10px;padding:14px;margin-bottom:10px}
+.fb-field-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.fb-field-row label{margin:0;white-space:nowrap}
+.fb-field-row input,.fb-field-row select{flex:1}
+.fb-options{display:flex;flex-direction:column;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--brd)}
+.fb-opt-row{display:flex;gap:6px}
+.fb-opt-row input{flex:1}
+/* Roster */
+.roster-grid-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:16px}
+.roster-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;min-width:700px}
+.r-day-col{background:var(--bg);border:1px solid var(--brd);border-radius:10px;overflow:hidden}
+.r-day-head{padding:8px;text-align:center;border-bottom:1px solid var(--brd);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--mut)}
+.r-day-body{padding:6px;min-height:60px}
+.r-shift{background:rgba(0,140,237,.1);border:1px solid rgba(0,140,237,.25);border-radius:6px;padding:6px 8px;margin-bottom:4px;font-size:11px;cursor:pointer;position:relative}
+.r-shift:hover{border-color:var(--amb)}
+.r-shift-del{position:absolute;top:3px;right:3px;background:none;border:none;color:var(--err);cursor:pointer;font-size:12px;line-height:1;display:none}
+.r-shift:hover .r-shift-del{display:block}
+.r-add-btn{width:100%;background:none;border:1px dashed var(--brd);border-radius:6px;color:var(--mut);font-size:18px;cursor:pointer;padding:4px;transition:border-color .15s;margin-top:4px}
+.r-add-btn:hover{border-color:var(--amb);color:var(--amb)}
+/* Time records */
+.tr-filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+.tr-filters input,.tr-filters select{width:auto;background:var(--sur);border:1px solid var(--brd);border-radius:7px;color:var(--txt);font-family:'DM Sans';font-size:12px;padding:7px 11px;outline:none}
+.tr-filters input:focus,.tr-filters select:focus{border-color:var(--amb)}
+
+/* ===== MOBILE RESPONSIVE ===== */
+@media(max-width:768px){
+  .topbar{padding:0 14px;height:50px}
+  .topbar img{height:22px}
+  .container{max-width:100%;padding:14px}
+  h1{font-size:20px}
+  .page-sub{font-size:12px;margin-bottom:16px}
+  /* Tabs become horizontal scroll strip */
+  .tabs{overflow-x:auto;flex-wrap:nowrap;border-radius:8px;padding:3px;gap:2px}
+  .tab{padding:7px 12px;font-size:11px;white-space:nowrap;flex-shrink:0}
+  /* Cards */
+  .card-head{flex-direction:column;align-items:flex-start;gap:10px;padding:12px 14px}
+  .card-head .card-actions,.card-head .tr-filters{width:100%;flex-wrap:wrap}
+  .card-head .tr-filters input,.card-head .tr-filters select{flex:1;min-width:0;width:auto}
+  /* KB admin two-col layout stacks */
+  #panel-kb>div{grid-template-columns:1fr}
+  #panel-kb #kbAdminCats{display:flex;overflow-x:auto;padding:6px 8px;gap:4px;flex-direction:row;border-right:none;border-bottom:1px solid var(--brd)}
+  #panel-kb #kbAdminCats>div{white-space:nowrap;flex-shrink:0;border-radius:20px;padding:6px 12px;font-size:12px}
+  /* Modals full-width bottom sheet */
+  .overlay{align-items:flex-end}
+  .modal{width:100% !important;max-width:100%;margin:0;border-radius:16px 16px 0 0 !important;padding:20px 16px;max-height:90dvh;overflow-y:auto}
+  .modal-wide{width:100% !important}
+  .form-row{grid-template-columns:1fr !important}
+  /* Form builder field rows */
+  .fb-field-row{flex-wrap:wrap;gap:6px}
+  .fb-field-row select{max-width:100% !important;width:100% !important}
+  .fb-field-row input{width:100% !important}
+  /* Roster edit header */
+  #rosterEditView>div:first-child{flex-direction:column;align-items:flex-start;gap:10px}
+  /* Toast */
+  .toast{left:12px;right:12px;bottom:16px;text-align:center}
+}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:14px">
+    <img src="/images/maverick-logo.png" alt="Maverick Campers" style="height:28px;width:auto">
+    <span style="color:var(--mut);font-size:12px;font-weight:500;letter-spacing:.5px;text-transform:uppercase">Admin Panel</span>
+  </div>
+  <button class="btn btn-ghost" onclick="location.href='/app.html'">← Back to Hub</button>
+</div>
+<div class="container">
+  <h1>Admin Panel</h1>
+  <p class="page-sub">Manage your team, locations, rosters, forms and knowledge base</p>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('users',this)">👥 Team</div>
+    <div class="tab" onclick="switchTab('stores',this)">📍 Locations</div>
+    <div class="tab" onclick="switchTab('timerecords',this)">⏱️ Time Records</div>
+    <div class="tab" onclick="switchTab('rosters',this)">📅 Rosters</div>
+    <div class="tab" onclick="switchTab('forms',this)">📋 Forms</div>
+    <div class="tab" onclick="switchTab('kb',this)">📚 Knowledge Base</div>
+    <div class="tab" onclick="switchTab('channels',this)">💬 Channels</div>
+  </div>
+
+  <!-- TEAM MEMBERS -->
+  <div class="panel active" id="panel-users">
+    <div class="card">
+      <div class="card-head"><div class="card-title">Team Members</div><button class="btn btn-amb" onclick="openAddUser()">+ Add Member</button></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Member</th><th>Username</th><th>Role</th><th>Assigned Locations</th><th>Actions</th></tr></thead>
+      <tbody id="usersTable"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- LOCATIONS -->
+  <div class="panel" id="panel-stores">
+    <div class="card">
+      <div class="card-head"><div class="card-title">Store Locations</div><button class="btn btn-amb" onclick="openAddStore()">+ Add Location</button></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Store</th><th>Address</th><th>GPS Coordinates</th><th>Geofence Radius</th><th>Actions</th></tr></thead>
+      <tbody id="storesTable"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- TIME RECORDS -->
+  <div class="panel" id="panel-timerecords">
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Time Records</div>
+        <div class="card-actions tr-filters">
+          <select id="trUserFilter" onchange="loadTimeRecords()">
+            <option value="">All staff</option>
+          </select>
+          <input type="date" id="trDateFrom" onchange="loadTimeRecords()" style="width:150px">
+          <button class="btn btn-ghost btn-sm" onclick="exportCSV()">Export CSV</button>
+        </div>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr><th>Staff</th><th>Location</th><th>Clock In</th><th>Clock Out</th><th>Duration</th><th>Notes</th><th>Actions</th></tr></thead>
+      <tbody id="timeTable"><tr class="empty-row"><td colspan="7">Loading...</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- ROSTERS -->
+  <div class="panel" id="panel-rosters">
+    <div id="rosterListView">
+      <div class="card">
+        <div class="card-head"><div class="card-title">Rosters</div><button class="btn btn-amb" onclick="openAddRoster()">+ Create Roster</button></div>
+        <div class="tbl-wrap"><table><thead><tr><th>Roster Name</th><th>Location</th><th>Week Starting</th><th>Actions</th></tr></thead>
+        <tbody id="rostersTable"><tr class="empty-row"><td colspan="4">Loading...</td></tr></tbody></table></div>
+      </div>
+    </div>
+    <div id="rosterEditView" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <button class="btn btn-ghost" onclick="showRosterList()" style="margin-right:10px">← All Rosters</button>
+          <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:18px" id="rosterEditTitle"></span>
+        </div>
+        <button class="btn btn-amb" onclick="openAddShift()">+ Add Shift</button>
+      </div>
+      <div class="roster-grid-wrap"><div class="roster-grid" id="rosterEditGrid"></div></div>
+    </div>
+  </div>
+
+  <!-- FORMS -->
+  <div class="panel" id="panel-forms">
+    <div id="formsListView">
+      <div class="card">
+        <div class="card-head"><div class="card-title">Forms</div><button class="btn btn-amb" onclick="openFormBuilder()">+ Create Form</button></div>
+        <div class="tbl-wrap"><table><thead><tr><th>Form</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+        <tbody id="formsAdminTable"><tr class="empty-row"><td colspan="4">Loading...</td></tr></tbody></table></div>
+      </div>
+    </div>
+    <div id="formsDetailView" style="display:none">
+      <button class="btn btn-ghost" onclick="showFormsList()" style="margin-bottom:16px">← All Forms</button>
+      <div class="card">
+        <div class="card-head"><div class="card-title" id="formDetailTitle"></div></div>
+        <div class="tbl-wrap"><table><thead><tr><th>Staff Member</th><th>Submitted</th><th>Responses</th></tr></thead>
+        <tbody id="formSubmissions"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KNOWLEDGE BASE -->
+  <div class="panel" id="panel-kb">
+    <div style="display:grid;grid-template-columns:280px 1fr;gap:16px">
+      <div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Categories</div><button class="btn btn-amb btn-sm" onclick="openAddKBCat()">+</button></div>
+          <div id="kbAdminCats" style="padding:8px 0"></div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title" id="kbArticlesTitle">All Articles</div>
+            <button class="btn btn-amb" onclick="openArticleEditor(null)">+ New Article</button>
+          </div>
+          <div class="tbl-wrap"><table><thead><tr><th>Title</th><th>Category</th><th>Updated</th><th>Read By</th><th>Actions</th></tr></thead>
+          <tbody id="kbArticlesTable"></tbody></table></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHANNELS -->
+  <div class="panel" id="panel-channels">
+    <div class="card">
+      <div class="card-head"><div class="card-title">Chat Channels</div><button class="btn btn-amb" onclick="openAddChannel()">+ Add Channel</button></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Channel</th><th>Description</th><th>Actions</th></tr></thead>
+      <tbody id="channelsTable"><tr class="empty-row"><td colspan="3">Loading...</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- ADD USER MODAL -->
+<div class="overlay" id="addUserModal">
+  <div class="modal"><h2>Add Team Member</h2>
+    <div class="form-row">
+      <div><label>Full Name</label><input type="text" id="newName" placeholder="Jane Smith"/></div>
+      <div><label>Username</label><input type="text" id="newUsername" placeholder="jane.smith"/></div>
+    </div>
+    <label>Password</label><input type="password" id="newPassword" placeholder="Set a strong password"/>
+    <label>Role</label><select id="newRole"><option value="member">Member</option><option value="manager">Manager</option><option value="admin">Admin</option></select>
+    <label>Assigned Locations</label>
+    <div id="newUserStores" style="display:flex;flex-direction:column;gap:8px;margin-top:4px"></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('addUserModal')">Cancel</button><button class="btn btn-amb" onclick="addUser()">Add Member</button></div>
+  </div>
+</div>
+
+<!-- EDIT USER STORES MODAL -->
+<div class="overlay" id="editUserStoresModal">
+  <div class="modal"><h2>Assign Locations — <span id="editUserStoresName"></span></h2>
+    <div id="editUserStoreList" style="display:flex;flex-direction:column;gap:10px;margin-top:4px"></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('editUserStoresModal')">Cancel</button><button class="btn btn-amb" onclick="saveUserStores()">Save</button></div>
+  </div>
+</div>
+
+<!-- ADD/EDIT STORE MODAL -->
+<div class="overlay" id="storeModal">
+  <div class="modal"><h2 id="storeModalTitle">Add Location</h2>
+    <label>Store Name</label><input type="text" id="storeName" placeholder="e.g. Wangara WA"/>
+    <label>Address</label><input type="text" id="storeAddress" placeholder="Full street address"/>
+    <div class="form-row">
+      <div><label>Latitude</label><input type="number" step="any" id="storeLat" placeholder="-31.7932"/></div>
+      <div><label>Longitude</label><input type="number" step="any" id="storeLng" placeholder="115.8026"/></div>
+    </div>
+    <label>Geofence Radius (metres)</label><input type="number" id="storeRadius" value="300" min="50" max="5000"/>
+    <div style="margin-top:10px"><button class="btn btn-blue btn-sm" onclick="useMyLocationForStore()">📍 Use my current GPS location</button></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('storeModal')">Cancel</button><button class="btn btn-amb" onclick="saveStore()">Save Location</button></div>
+  </div>
+</div>
+
+<!-- ADD ROSTER MODAL -->
+<div class="overlay" id="addRosterModal">
+  <div class="modal"><h2>Create Roster</h2>
+    <label>Roster Name</label><input type="text" id="rosterName" placeholder="e.g. Week of 19 May"/>
+    <label>Primary Location (optional)</label><select id="rosterStore"><option value="">— All Locations —</option></select>
+    <label>Week Starting (Monday)</label><input type="date" id="rosterWeekStart"/>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('addRosterModal')">Cancel</button><button class="btn btn-amb" onclick="createRoster()">Create</button></div>
+  </div>
+</div>
+
+<!-- ADD SHIFT MODAL -->
+<div class="overlay" id="addShiftModal">
+  <div class="modal"><h2>Add Shift</h2>
+    <label>Staff Member</label><select id="shiftUser" class="fld-select"></select>
+    <label>Location</label><select id="shiftStore" class="fld-select"></select>
+    <label>Date</label><input type="date" id="shiftDate" style="color-scheme:dark"/>
+    <div class="form-row">
+      <div><label>Start Time</label><input type="time" id="shiftStart"/></div>
+      <div><label>End Time</label><input type="time" id="shiftEnd"/></div>
+    </div>
+    <label>Role / Position (optional)</label><input type="text" id="shiftRole" placeholder="e.g. Sales Consultant"/>
+    <label>Notes (optional)</label><input type="text" id="shiftNotes" placeholder="Any shift notes"/>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('addShiftModal')">Cancel</button><button class="btn btn-amb" onclick="addShift()">Add Shift</button></div>
+  </div>
+</div>
+
+<!-- FORM BUILDER MODAL -->
+<div class="overlay" id="formBuilderModal">
+  <div class="modal modal-wide"><h2 id="fbTitle">Create Form</h2>
+    <label>Form Title</label><input type="text" id="fbFormTitle" placeholder="e.g. Daily Safety Checklist"/>
+    <label>Description (optional)</label><input type="text" id="fbFormDesc" placeholder="Brief description"/>
+    <label>Active</label><select id="fbFormActive"><option value="1">Yes – visible to staff</option><option value="0">No – hidden</option></select>
+    <div style="margin:16px 0 8px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;font-weight:500">Form Fields</span>
+      <button class="btn btn-blue btn-sm" onclick="addFBField()">+ Add Field</button>
+    </div>
+    <div id="fbFields"></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('formBuilderModal')">Cancel</button><button class="btn btn-amb" onclick="saveForm()">Save Form</button></div>
+  </div>
+</div>
+
+<!-- KB ARTICLE EDITOR -->
+<div class="overlay" id="kbArticleModal">
+  <div class="modal modal-wide"><h2 id="kbArticleModalTitle">New Article</h2>
+    <label>Title</label><input type="text" id="kbArtTitle" placeholder="Article title"/>
+    <label>Category</label><select id="kbArtCat"><option value="">— Uncategorised —</option></select>
+    <label>Content</label><textarea id="kbArtContent" style="min-height:200px" placeholder="Write your article content here..."></textarea>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('kbArticleModal')">Cancel</button><button class="btn btn-amb" onclick="saveArticle()">Save Article</button></div>
+  </div>
+</div>
+
+<!-- KB CATEGORY MODAL -->
+<div class="overlay" id="kbCatModal">
+  <div class="modal"><h2 id="kbCatModalTitle">Add Category</h2>
+    <label>Category Name</label><input type="text" id="kbCatName" placeholder="e.g. Safety"/>
+    <label>Description</label><input type="text" id="kbCatDesc" placeholder="Brief description"/>
+    <div class="form-row">
+      <div><label>Icon (emoji)</label><input type="text" id="kbCatIcon" placeholder="📄" maxlength="4"/></div>
+      <div><label>Sort Order</label><input type="number" id="kbCatOrder" value="0"/></div>
+    </div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('kbCatModal')">Cancel</button><button class="btn btn-amb" onclick="saveKBCat()">Save</button></div>
+  </div>
+</div>
+
+<!-- CHANNEL MODALS -->
+<div class="overlay" id="addChannelModal">
+  <div class="modal"><h2>Add Channel</h2>
+    <label>Channel Name</label><input type="text" id="newChName" placeholder="e.g. project-alpha"/>
+    <label>Description</label><input type="text" id="newChDesc" placeholder="What's this channel for?"/>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('addChannelModal')">Cancel</button><button class="btn btn-amb" onclick="addChannel()">Create</button></div>
+  </div>
+</div>
+
+<!-- EDIT TIME RECORD MODAL -->
+<div class="overlay" id="editTRModal">
+  <div class="modal"><h2>Edit Time Record</h2>
+    <input type="hidden" id="editTRId"/>
+    <label>Clock In</label><input type="datetime-local" id="editTRIn"/>
+    <label>Clock Out</label><input type="datetime-local" id="editTROut"/>
+    <label>Notes</label><input type="text" id="editTRNotes"/>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('editTRModal')">Cancel</button><button class="btn btn-amb" onclick="saveTR()">Save</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script>
+let users=[],channels=[],stores=[],allTimeRecords=[],rosters=[],kbCats=[],kbArticles=[];
+let curRosterId=null,curRosterWeekStart=null;
+let editingStoreId=null,editingFormId=null,editingKBArticleId=null,editingKBCatId=null,editingUserStoresId=null;
+let fbFields=[];
+
+async function init(){
+  const me=await fetch('/api/me').then(r=>r.json()).catch(()=>null);
+  if (!me||!['admin','manager'].includes(me.role)){location.href='/app.html';return}
+  window._myRole=me.role;
+  // Managers only see Forms and KB tabs — hide admin-only tabs
+  if (me.role==='manager'){
+    document.querySelectorAll('.tab').forEach(t=>{
+      const name=t.getAttribute('onclick')?.match(/switchTab\('([^']+)'/)?.[1];
+      if (!['forms','kb'].includes(name)) t.style.display='none';
+    });
+    // Default to forms tab for managers
+    const formsTab=document.querySelector(".tab[onclick*=\"switchTab('forms'\"]");
+    if(formsTab){document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));formsTab.classList.add('active');document.getElementById('panel-forms').classList.add('active');}
+    loadAdminForms();
+  } else {
+    await Promise.all([loadUsers(),loadStores(),loadChannels()]);
+    const sevenAgo=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+    document.getElementById('trDateFrom').value=sevenAgo;
+  }
+  // Always load stores for dropdowns even for managers
+  if (me.role==='manager') stores=await fetch('/api/stores').then(r=>r.json()).catch(()=>[]);
+}
+
+function switchTab(name,el){
+  // Block managers from admin-only tabs
+  if (window._myRole==='manager'&&!['forms','kb'].includes(name)) return;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');document.getElementById('panel-'+name).classList.add('active');
+  if (name==='timerecords') loadTimeRecords();
+  if (name==='rosters') loadRosters();
+  if (name==='forms') loadAdminForms();
+  if (name==='kb') loadKBAdmin();
+}
+
+// ===== USERS =====
+async function loadUsers(){
+  const r=await fetch('/api/users');users=await r.json();
+  const sr=await fetch('/api/stores');stores=await r.json().catch(()=>stores);
+  renderUsers();
+  populateUserFilter();
+}
+async function loadUsersAndStores(){
+  [users,stores]=await Promise.all([
+    fetch('/api/users').then(r=>r.json()),
+    fetch('/api/stores').then(r=>r.json()),
+  ]);
+  renderUsers();
+  populateUserFilter();
+}
+
+async function renderUsers(){
+  // re-fetch stores if empty
+  if (!stores.length) stores=await fetch('/api/stores').then(r=>r.json()).catch(()=>[]);
+  const tb=document.getElementById('usersTable');
+  if (!users.length){tb.innerHTML='<tr class="empty-row"><td colspan="5">No members yet</td></tr>';return}
+  const userStoreData={};
+  await Promise.all(users.map(async u=>{
+    try{const s=await fetch('/api/users/'+u.id+'/stores').then(r=>r.json());userStoreData[u.id]=s;}
+    catch{userStoreData[u.id]=[];}
+  }));
+  tb.innerHTML=users.map(u=>`<tr>
+    <td><div style="display:flex;align-items:center;gap:8px"><div class="avatar" style="background:${u.avatar_color}">${initials(u.name)}</div>${esc(u.name)}</div></td>
+    <td style="color:var(--mut)">@${esc(u.username)}</td>
+    <td><span class="role-badge role-${u.role}">${u.role==='admin'?'Admin':u.role==='manager'?'Manager':'Member'}</span></td>
+    <td>${(userStoreData[u.id]||[]).map(s=>`<span class="store-badge">📍 ${esc(s.name)}</span>`).join('')||'<span style="color:var(--mut)">None</span>'}</td>
+    <td>
+      <button class="btn btn-blue btn-sm" onclick="editUserStores(${u.id},'${esc(u.name)}')" style="margin-right:4px">Assign Stores</button>
+      ${u.role!=='admin'?`<button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id},'${esc(u.name)}')">Remove</button>`:''}
+    </td>
+  </tr>`).join('');
+}
+
+function openAddUser(){
+  document.getElementById('addUserModal').classList.add('show');
+  const c=document.getElementById('newUserStores');
+  c.innerHTML=stores.map(s=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0;margin:0;color:var(--txt)"><input type="checkbox" data-store-id="${s.id}" style="accent-color:var(--amb);width:15px;height:15px"> ${esc(s.name)}</label>`).join('');
+}
+
+async function addUser(){
+  const name=document.getElementById('newName').value.trim();
+  const username=document.getElementById('newUsername').value.trim();
+  const password=document.getElementById('newPassword').value;
+  const role=document.getElementById('newRole').value;
+  const storeIds=Array.from(document.querySelectorAll('#newUserStores input:checked')).map(i=>parseInt(i.dataset.storeId));
+  if (!name||!username||!password){showToast('All required fields needed','err');return}
+  const r=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,username,password,role})});
+  const d=await r.json();
+  if (!r.ok){showToast(d.error,'err');return}
+  if (storeIds.length) await fetch('/api/users/'+d.id+'/stores',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({store_ids:storeIds})});
+  closeModal('addUserModal');
+  ['newName','newUsername','newPassword'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('newRole').value='member';
+  showToast(name+' added!','ok');await loadUsersAndStores();
+}
+
+async function deleteUser(id,name){
+  if (!confirm('Remove '+name+' from the team?'))return;
+  const r=await fetch('/api/users/'+id,{method:'DELETE'});
+  if (r.ok){showToast(name+' removed','ok');await loadUsersAndStores();}
+  else{const d=await r.json();showToast(d.error,'err')}
+}
+
+async function editUserStores(uid,name){
+  editingUserStoresId=uid;
+  document.getElementById('editUserStoresName').textContent=name;
+  const assigned=await fetch('/api/users/'+uid+'/stores').then(r=>r.json()).catch(()=>[]);
+  const assignedIds=new Set(assigned.map(s=>s.id));
+  document.getElementById('editUserStoreList').innerHTML=stores.map(s=>`
+    <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0;margin:0;color:var(--txt)">
+      <input type="checkbox" data-store-id="${s.id}" ${assignedIds.has(s.id)?'checked':''} style="accent-color:var(--amb);width:15px;height:15px">
+      <div><div style="font-weight:500">${esc(s.name)}</div><div style="font-size:11px;color:var(--mut)">${esc(s.address)}</div></div>
+    </label>`).join('');
+  document.getElementById('editUserStoresModal').classList.add('show');
+}
+
+async function saveUserStores(){
+  const storeIds=Array.from(document.querySelectorAll('#editUserStoreList input:checked')).map(i=>parseInt(i.dataset.storeId));
+  await fetch('/api/users/'+editingUserStoresId+'/stores',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({store_ids:storeIds})});
+  closeModal('editUserStoresModal');showToast('Locations updated','ok');await loadUsersAndStores();
+}
+
+// ===== STORES =====
+async function loadStores(){
+  stores=await fetch('/api/stores').then(r=>r.json());
+  renderStores();
+}
+function renderStores(){
+  const tb=document.getElementById('storesTable');
+  if (!stores.length){tb.innerHTML='<tr class="empty-row"><td colspan="5">No locations yet</td></tr>';return}
+  tb.innerHTML=stores.map(s=>`<tr>
+    <td style="font-weight:500">📍 ${esc(s.name)}</td>
+    <td style="color:var(--mut);font-size:12px">${esc(s.address)}</td>
+    <td style="font-size:12px;color:var(--mut)">${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</td>
+    <td>${s.radius}m</td>
+    <td>
+      <button class="btn btn-blue btn-sm" onclick="openEditStore(${s.id})" style="margin-right:4px">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteStore(${s.id},'${esc(s.name)}')">Delete</button>
+    </td>
+  </tr>`).join('');
+}
+
+function openAddStore(){
+  editingStoreId=null;
+  document.getElementById('storeModalTitle').textContent='Add Location';
+  ['storeName','storeAddress','storeLat','storeLng'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('storeRadius').value='300';
+  document.getElementById('storeModal').classList.add('show');
+}
+
+function openEditStore(id){
+  editingStoreId=id;
+  const s=stores.find(x=>x.id===id);
+  document.getElementById('storeModalTitle').textContent='Edit Location';
+  document.getElementById('storeName').value=s.name;
+  document.getElementById('storeAddress').value=s.address;
+  document.getElementById('storeLat').value=s.lat;
+  document.getElementById('storeLng').value=s.lng;
+  document.getElementById('storeRadius').value=s.radius;
+  document.getElementById('storeModal').classList.add('show');
+}
+
+function useMyLocationForStore(){
+  if (!navigator.geolocation){showToast('GPS not available','err');return}
+  navigator.geolocation.getCurrentPosition(pos=>{
+    document.getElementById('storeLat').value=pos.coords.latitude.toFixed(6);
+    document.getElementById('storeLng').value=pos.coords.longitude.toFixed(6);
+    showToast('GPS location captured','ok');
+  },err=>{showToast('GPS error: '+err.message,'err')},{enableHighAccuracy:true,timeout:10000});
+}
+
+async function saveStore(){
+  const name=document.getElementById('storeName').value.trim();
+  const address=document.getElementById('storeAddress').value.trim();
+  const lat=parseFloat(document.getElementById('storeLat').value);
+  const lng=parseFloat(document.getElementById('storeLng').value);
+  const radius=parseInt(document.getElementById('storeRadius').value)||300;
+  if (!name||isNaN(lat)||isNaN(lng)){showToast('Name, lat and lng required','err');return}
+  if (editingStoreId) {
+    const r=await fetch('/api/stores/'+editingStoreId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,address,lat,lng,radius})});
+    if (r.ok){closeModal('storeModal');showToast('Location updated','ok');await loadStores();}
+    else{const d=await r.json();showToast(d.error,'err');}
+  } else {
+    const r=await fetch('/api/stores',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,address,lat,lng,radius})});
+    if (r.ok){closeModal('storeModal');showToast('Location added','ok');await loadStores();}
+    else{const d=await r.json();showToast(d.error,'err');}
+  }
+}
+
+async function deleteStore(id,name){
+  if (!confirm('Delete location '+name+'? Staff assignments will also be removed.'))return;
+  const r=await fetch('/api/stores/'+id,{method:'DELETE'});
+  if (r.ok){showToast(name+' deleted','ok');await loadStores();}
+  else{const d=await r.json();showToast(d.error,'err')}
+}
+
+// ===== TIME RECORDS =====
+function populateUserFilter(){
+  const sel=document.getElementById('trUserFilter');
+  const cur=sel.value;
+  sel.innerHTML='<option value="">All staff</option>';
+  users.forEach(u=>sel.add(new Option(u.name,u.id)));
+  sel.value=cur;
+}
+
+async function loadTimeRecords(){
+  const userId=document.getElementById('trUserFilter').value;
+  const dateFrom=document.getElementById('trDateFrom').value;
+  let url='/api/clock/all';
+  allTimeRecords=await fetch(url).then(r=>r.json()).catch(()=>[]);
+  let filtered=allTimeRecords;
+  if (userId) filtered=filtered.filter(r=>r.user_id==userId);
+  if (dateFrom) filtered=filtered.filter(r=>r.clock_in_at>=dateFrom);
+  renderTimeRecords(filtered);
+}
+
+function renderTimeRecords(recs){
+  const tb=document.getElementById('timeTable');
+  if (!recs.length){tb.innerHTML='<tr class="empty-row"><td colspan="7">No records found</td></tr>';return}
+  tb.innerHTML=recs.map(r=>{
+    const isActive=!r.clock_out_at;
+    const dur=isActive?'<span style="color:var(--grn);font-weight:600">Active</span>':durStr(r.clock_in_at,r.clock_out_at);
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:7px"><div class="avatar" style="background:${r.avatar_color};width:24px;height:24px;font-size:9px">${initials(r.user_name)}</div>${esc(r.user_name)}</div></td>
+      <td style="font-size:12px">📍 ${esc(r.store_name)}</td>
+      <td style="font-size:12px">${fmtDT(r.clock_in_at)}</td>
+      <td style="font-size:12px">${r.clock_out_at?fmtDT(r.clock_out_at):'<span style="color:var(--grn)">Active</span>'}</td>
+      <td style="font-family:Syne,sans-serif;font-weight:700;color:var(--amb)">${dur}</td>
+      <td style="font-size:12px;color:var(--mut)">${esc(r.notes||'')}</td>
+      <td>
+        <button class="btn btn-blue btn-sm" onclick="openEditTR(${r.id})" style="margin-right:4px">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteTR(${r.id})">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openEditTR(id){
+  const r=allTimeRecords.find(x=>x.id===id);
+  document.getElementById('editTRId').value=id;
+  document.getElementById('editTRIn').value=r.clock_in_at?r.clock_in_at.slice(0,16):'';
+  document.getElementById('editTROut').value=r.clock_out_at?r.clock_out_at.slice(0,16):'';
+  document.getElementById('editTRNotes').value=r.notes||'';
+  document.getElementById('editTRModal').classList.add('show');
+}
+
+async function saveTR(){
+  const id=document.getElementById('editTRId').value;
+  const clock_in_at=document.getElementById('editTRIn').value;
+  const clock_out_at=document.getElementById('editTROut').value;
+  const notes=document.getElementById('editTRNotes').value;
+  const r=await fetch('/api/clock/records/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({clock_in_at,clock_out_at,notes})});
+  if (r.ok){closeModal('editTRModal');showToast('Record updated','ok');loadTimeRecords();}
+  else{const d=await r.json();showToast(d.error,'err');}
+}
+
+async function deleteTR(id){
+  if (!confirm('Delete this time record?'))return;
+  const r=await fetch('/api/clock/records/'+id,{method:'DELETE'});
+  if (r.ok){showToast('Record deleted','ok');loadTimeRecords();}
+  else{const d=await r.json();showToast(d.error,'err');}
+}
+
+function exportCSV(){
+  const userId=document.getElementById('trUserFilter').value;
+  const dateFrom=document.getElementById('trDateFrom').value;
+  let filtered=allTimeRecords;
+  if (userId) filtered=filtered.filter(r=>r.user_id==userId);
+  if (dateFrom) filtered=filtered.filter(r=>r.clock_in_at>=dateFrom);
+  const rows=[['Name','Location','Clock In','Clock Out','Duration (hrs)','Notes']];
+  filtered.forEach(r=>{
+    const dur=r.clock_out_at?((new Date(r.clock_out_at)-new Date(r.clock_in_at))/3600000).toFixed(2):'';
+    rows.push([r.user_name,r.store_name,r.clock_in_at||'',r.clock_out_at||'',dur,r.notes||'']);
+  });
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='time_records.csv';a.click();
+}
+
+function durStr(inn,out){
+  const ms=new Date(out)-new Date(inn);
+  const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);
+  return h+'h '+(m?m+'m':'');
+}
+function fmtDT(dt){
+  return new Date(dt).toLocaleDateString('en-AU',{day:'numeric',month:'short'})+' '+new Date(dt).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ===== ROSTERS =====
+async function loadRosters(){
+  rosters=await fetch('/api/rosters').then(r=>r.json());
+  const tb=document.getElementById('rostersTable');
+  if (!rosters.length){tb.innerHTML='<tr class="empty-row"><td colspan="4">No rosters yet</td></tr>';return}
+  tb.innerHTML=rosters.map(r=>`<tr>
+    <td style="font-weight:500">${esc(r.name)}</td>
+    <td style="font-size:12px;color:var(--mut)">${r.store_name||'All Locations'}</td>
+    <td style="font-size:12px">${fmtDateShort(r.week_start)}</td>
+    <td>
+      <button class="btn btn-blue btn-sm" onclick="openRosterEdit(${r.id},'${esc(r.name)}','${r.week_start}')" style="margin-right:4px">Edit Shifts</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteRoster(${r.id},'${esc(r.name)}')">Delete</button>
+    </td>
+  </tr>`).join('');
+  // Populate store select in add roster modal
+  const rsel=document.getElementById('rosterStore');
+  rsel.innerHTML='<option value="">— All Locations —</option>';
+  stores.forEach(s=>rsel.add(new Option(s.name,s.id)));
+}
+
+function openAddRoster(){
+  document.getElementById('rosterName').value='';
+  document.getElementById('rosterWeekStart').value=getMonday();
+  document.getElementById('addRosterModal').classList.add('show');
+}
+
+function getMonday(){
+  const d=new Date();const day=d.getDay();
+  d.setDate(d.getDate()-(day===0?6:day-1));
+  return d.toISOString().slice(0,10);
+}
+
+async function createRoster(){
+  const name=document.getElementById('rosterName').value.trim();
+  const store_id=document.getElementById('rosterStore').value||null;
+  const week_start=document.getElementById('rosterWeekStart').value;
+  if (!name||!week_start){showToast('Name and week start required','err');return}
+  const r=await fetch('/api/rosters',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,store_id:store_id?parseInt(store_id):null,week_start})});
+  const d=await r.json();
+  if (!r.ok){showToast(d.error,'err');return}
+  closeModal('addRosterModal');showToast('Roster created','ok');await loadRosters();
+}
+
+async function deleteRoster(id,name){
+  if (!confirm('Delete roster "'+name+'"? All shifts will be removed.'))return;
+  const r=await fetch('/api/rosters/'+id,{method:'DELETE'});
+  if (r.ok){showToast('Roster deleted','ok');await loadRosters();}
+  else{const d=await r.json();showToast(d.error,'err');}
+}
+
+async function openRosterEdit(id,name,weekStart){
+  curRosterId=id;curRosterWeekStart=weekStart;
+  document.getElementById('rosterEditTitle').textContent=name+' (w/c '+fmtDateShort(weekStart)+')';
+  document.getElementById('rosterListView').style.display='none';
+  document.getElementById('rosterEditView').style.display='block';
+  await renderRosterGrid();
+}
+
+function showRosterList(){
+  document.getElementById('rosterListView').style.display='block';
+  document.getElementById('rosterEditView').style.display='none';
+  curRosterId=null;
+}
+
+async function renderRosterGrid(){
+  const shifts=await fetch('/api/rosters/'+curRosterId+'/shifts').then(r=>r.json());
+  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const ws=new Date(curRosterWeekStart+'T00:00:00');
+  const grid=document.getElementById('rosterEditGrid');
+  grid.innerHTML=days.map((d,i)=>{
+    const date=new Date(ws.getTime()+i*864e5);
+    const ds=date.toISOString().slice(0,10);
+    const dayShifts=shifts.filter(s=>s.shift_date===ds);
+    return `<div class="r-day-col">
+      <div class="r-day-head">${d} ${date.getDate()}</div>
+      <div class="r-day-body" id="day-${ds}">
+        ${dayShifts.map(s=>`<div class="r-shift" title="${esc(s.user_name)}\n${s.start_time}–${s.end_time}">
+          <button class="r-shift-del" onclick="deleteShift(${s.id})" title="Remove">✕</button>
+          <div style="font-weight:600;color:var(--amb)">${esc(s.user_name.split(' ')[0])}</div>
+          <div style="color:var(--mut)">${s.start_time}–${s.end_time}</div>
+          ${s.role?`<div style="color:var(--txt)">${esc(s.role)}</div>`:''}
+        </div>`).join('')}
+      </div>
+      <button class="r-add-btn" onclick="openAddShiftForDate('${ds}')">+</button>
+    </div>`;
+  }).join('');
+}
+
+function openAddShift(){
+  document.getElementById('shiftDate').value='';
+  openAddShiftDialog();
+}
+
+function openAddShiftForDate(ds){
+  document.getElementById('shiftDate').value=ds;
+  openAddShiftDialog();
+}
+
+function openAddShiftDialog(){
+  const usel=document.getElementById('shiftUser');usel.innerHTML='';
+  users.forEach(u=>usel.add(new Option(u.name,u.id)));
+  const ssel=document.getElementById('shiftStore');ssel.innerHTML='';
+  stores.forEach(s=>ssel.add(new Option(s.name,s.id)));
+  document.getElementById('shiftStart').value='09:00';
+  document.getElementById('shiftEnd').value='17:00';
+  document.getElementById('shiftRole').value='';
+  document.getElementById('shiftNotes').value='';
+  document.getElementById('addShiftModal').classList.add('show');
+}
+
+async function addShift(){
+  const user_id=parseInt(document.getElementById('shiftUser').value);
+  const store_id=parseInt(document.getElementById('shiftStore').value);
+  const shift_date=document.getElementById('shiftDate').value;
+  const start_time=document.getElementById('shiftStart').value;
+  const end_time=document.getElementById('shiftEnd').value;
+  const role=document.getElementById('shiftRole').value;
+  const notes=document.getElementById('shiftNotes').value;
+  if (!shift_date||!start_time||!end_time){showToast('Date and times required','err');return}
+  const r=await fetch('/api/rosters/'+curRosterId+'/shifts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id,store_id,shift_date,start_time,end_time,role,notes})});
+  if (r.ok){closeModal('addShiftModal');showToast('Shift added','ok');await renderRosterGrid();}
+  else{const d=await r.json();showToast(d.error,'err');}
+}
+
+async function deleteShift(id){
+  if (!confirm('Remove this shift?'))return;
+  const r=await fetch('/api/rosters/shifts/'+id,{method:'DELETE'});
+  if (r.ok){showToast('Shift removed','ok');await renderRosterGrid();}
+  else{const d=await r.json();showToast(d.error,'err');}
+}
+
+// ===== FORMS ADMIN =====
+async function loadAdminForms(){
+  const forms=await fetch('/api/forms/all').then(r=>r.json()).catch(()=>[]);
+  const tb=document.getElementById('formsAdminTable');
+  if (!forms.length){tb.innerHTML='<tr class="empty-row"><td colspan="4">No forms yet</td></tr>';return}
+  tb.innerHTML=forms.map(f=>`<tr>
+    <td style="font-weight:500">${esc(f.title)}</td>
+    <td><span class="status-badge ${f.active?'badge-grn':'badge-mut'}">${f.active?'Active':'Inactive'}</span></td>
+    <td style="font-size:12px;color:var(--mut)">${fmtDateShort(f.created_at?.slice(0,10))}</td>
+    <td>
+      <button class="btn btn-blue btn-sm" onclick="openFormBuilder(${f.id})" style="margin-right:4px">Edit</button>
+      <button class="btn btn-blue btn-sm" onclick="viewSubmissions(${f.id},'${esc(f.title)}')" style="margin-right:4px">Submissions</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteForm(${f.id},'${esc(f.title)}')">Delete</button>
+    </td>
+  </tr>`).join('');
+}
+
+async function openFormBuilder(id=null){
+  editingFormId=id;fbFields=[];
+  document.getElementById('fbTitle').textContent=id?'Edit Form':'Create Form';
+  document.getElementById('fbFormTitle').value='';
+  document.getElementById('fbFormDesc').value='';
+  document.getElementById('fbFormActive').value='1';
+  document.getElementById('fbFields').innerHTML='';
+  if (id) {
+    const f=await fetch('/api/forms/'+id).then(r=>r.json());
+    document.getElementById('fbFormTitle').value=f.title;
+    document.getElementById('fbFormDesc').value=f.description||'';
+    document.getElementById('fbFormActive').value=f.active?'1':'0';
+    fbFields=f.fields.map(f=>({...f}));
+  }
+  renderFBFields();
+  document.getElementById('formBuilderModal').classList.add('show');
+}
+
+function addFBField(){
+  fbFields.push({id:'field_'+Date.now(),type:'text',label:'',required:false,options:[]});
+  renderFBFields();
+}
+
+function renderFBFields(){
+  const container=document.getElementById('fbFields');
+  if (!fbFields.length){container.innerHTML='<div style="text-align:center;color:var(--mut);font-size:13px;padding:16px 0">No fields yet. Click + Add Field.</div>';return}
+  container.innerHTML=fbFields.map((f,i)=>`
+    <div class="fb-field">
+      <div class="fb-field-row">
+        <label style="min-width:45px">Type</label>
+        <select style="flex:1;max-width:160px" onchange="updateFBField(${i},'type',this.value);renderFBFields()">
+          ${['text','textarea','number','date','checkbox','select','radio'].map(t=>`<option value="${t}" ${f.type===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+        <label style="min-width:40px">Label</label>
+        <input type="text" value="${esc(f.label)}" placeholder="Field label" oninput="updateFBField(${i},'label',this.value)" style="flex:2">
+        <label style="display:flex;align-items:center;gap:5px;min-width:0;text-transform:none;letter-spacing:0;color:var(--txt)">
+          <input type="checkbox" ${f.required?'checked':''} onchange="updateFBField(${i},'required',this.checked)" style="width:14px;height:14px;accent-color:var(--amb)"> Req
+        </label>
+        <button class="btn btn-danger btn-sm" onclick="removeFBField(${i})">✕</button>
+      </div>
+      ${['select','radio'].includes(f.type)?`
+        <div class="fb-options">
+          <span style="font-size:11px;color:var(--mut)">Options (one per line)</span>
+          ${(f.options||[]).map((o,oi)=>`
+            <div class="fb-opt-row">
+              <input type="text" value="${esc(o)}" placeholder="Option ${oi+1}" oninput="updateFBOption(${i},${oi},this.value)">
+              <button class="btn btn-danger btn-sm" onclick="removeFBOption(${i},${oi})">✕</button>
+            </div>`).join('')}
+          <button class="btn btn-ghost btn-sm" onclick="addFBOption(${i})">+ Add Option</button>
+        </div>`:''}
+    </div>`).join('');
+}
+
+function updateFBField(i,key,val){fbFields[i][key]=val;if(key==='type'&&['select','radio'].includes(val)&&!fbFields[i].options)fbFields[i].options=[];}
+function removeFBField(i){fbFields.splice(i,1);renderFBFields()}
+function addFBOption(i){fbFields[i].options=fbFields[i].options||[];fbFields[i].options.push('');renderFBFields()}
+function updateFBOption(i,oi,val){fbFields[i].options[oi]=val}
+function removeFBOption(i,oi){fbFields[i].options.splice(oi,1);renderFBFields()}
+
+async function saveForm(){
+  const title=document.getElementById('fbFormTitle').value.trim();
+  const description=document.getElementById('fbFormDesc').value.trim();
+  const active=parseInt(document.getElementById('fbFormActive').value);
+  if (!title){showToast('Form title required','err');return}
+  const fields=fbFields.map(f=>({...f}));
+  if (editingFormId) {
+    const r=await fetch('/api/forms/'+editingFormId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,description,fields,active})});
+    if (r.ok){closeModal('formBuilderModal');showToast('Form updated','ok');loadAdminForms();}
+    else{const d=await r.json();showToast(d.error,'err');}
+  } else {
+    const r=await fetch('/api/forms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,description,fields})});
+    if (r.ok){closeModal('formBuilderModal');showToast('Form created','ok');loadAdminForms();}
+    else{const d=await r.json();showToast(d.error,'err');}
+  }
+}
+
+async function deleteForm(id,name){
+  if (!confirm('Delete form "'+name+'"? All submissions will be lost.'))return;
+  const r=await fetch('/api/forms/'+id,{method:'DELETE'});
+  if (r.ok){showToast('Form deleted','ok');loadAdminForms();}
+  else{const d=await r.json();showToast(d.error,'err');}
+}
+
+async function viewSubmissions(id,name){
+  document.getElementById('formsListView').style.display='none';
+  document.getElementById('formsDetailView').style.display='block';
+  document.getElementById('formDetailTitle').textContent='Submissions: '+name;
+  const subs=await fetch('/api/forms/'+id+'/submissions').then(r=>r.json()).catch(()=>[]);
+  const form=await fetch('/api/forms/'+id).then(r=>r.json());
+  const tb=document.getElementById('formSubmissions');
+  if (!subs.length){tb.innerHTML='<tr class="empty-row"><td colspan="3">No submissions yet</td></tr>';return}
+  tb.innerHTML=subs.map(s=>{
+    const responses=form.fields.map(f=>`<div style="margin-bottom:4px"><strong style="font-size:11px;color:var(--mut)">${esc(f.label)}:</strong> ${esc(String(s.data[f.id]??''))}</div>`).join('');
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:7px"><div class="avatar" style="background:${s.avatar_color};width:24px;height:24px;font-size:9px">${initials(s.user_name)}</div>${esc(s.user_name)}</div></td>
+      <td style="font-size:12px;color:var(--mut)">${fmtDT(s.submitted_at)}</td>
+      <td style="font-size:12px">${responses}</td>
+    </tr>`;
+  }).join('');
+}
+
+function showFormsList(){
+  document.getElementById('formsListView').style.display='block';
+  document.getElementById('formsDetailView').style.display='none';
+}
+
+// ===== KNOWLEDGE BASE =====
+let kbSelectedCat=null;
+async function loadKBAdmin(){
+  [kbCats,kbArticles]=await Promise.all([
+    fetch('/api/kb/categories').then(r=>r.json()),
+    fetch('/api/kb/articles').then(r=>r.json()),
+  ]);
+  renderKBAdminCats();
+  renderKBAdminArticles(kbArticles);
+  // Populate article cat select
+  const sel=document.getElementById('kbArtCat');
+  sel.innerHTML='<option value="">— Uncategorised —</option>';
+  kbCats.forEach(c=>sel.add(new Option(c.icon+' '+c.name,c.id)));
+}
+
+function renderKBAdminCats(){
+  const el=document.getElementById('kbAdminCats');
+  el.innerHTML=`<div style="padding:8px 16px;cursor:pointer;font-size:13px;color:${kbSelectedCat===null?'var(--txt)':'var(--mut)'}" onclick="kbAdminCatSelect(null)">🗂️ All Articles</div>`;
+  el.innerHTML+=kbCats.map(c=>`
+    <div style="display:flex;align-items:center;padding:6px 16px;cursor:pointer;font-size:13px;color:${kbSelectedCat==c.id?'var(--txt)':'var(--mut)'}" onclick="kbAdminCatSelect(${c.id})">
+      <span style="flex:1">${c.icon||'📄'} ${esc(c.name)}</span>
+      <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteKBCat(${c.id},'${esc(c.name)}')">✕</button>
+    </div>`).join('');
+}
+
+function kbAdminCatSelect(id){
+  kbSelectedCat=id;
+  renderKBAdminCats();
+  const filtered=id?kbArticles.filter(a=>a.category_id==id):kbArticles;
+  document.getElementById('kbArticlesTitle').textContent=id?(kbCats.find(c=>c.id==id)?.name||'Articles'):'All Articles';
+  renderKBAdminArticles(filtered);
+}
+
+async function renderKBAdminArticles(articles){
+  const tb=document.getElementById('kbArticlesTable');
+  if (!articles.length){tb.innerHTML='<tr class="empty-row"><td colspan="5">No articles yet</td></tr>';return}
+  // Fetch total user count for read percentage
+  const totalUsers=users.length||1;
+  // Build rows (fetch read counts in parallel)
+  const readCounts=await Promise.all(articles.map(a=>
+    fetch('/api/kb/articles/'+a.id+'/reads').then(r=>r.json()).catch(()=>[])
+  ));
+  tb.innerHTML=articles.map((a,i)=>{
+    const reads=readCounts[i]||[];
+    const pct=totalUsers>0?Math.round((reads.length/totalUsers)*100):0;
+    const readNames=reads.slice(0,3).map(r=>esc(r.name)).join(', ')+(reads.length>3?` +${reads.length-3} more`:'');
+    return `<tr>
+      <td style="font-weight:500">${esc(a.title)}</td>
+      <td style="font-size:12px;color:var(--mut)">${a.category_icon||'📄'} ${esc(a.category_name||'Uncategorised')}</td>
+      <td style="font-size:12px;color:var(--mut)">${fmtDateShort(a.updated_at?.slice(0,10))}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;background:var(--brd);border-radius:4px;height:6px;min-width:60px"><div style="height:6px;border-radius:4px;background:var(--grn);width:${pct}%"></div></div>
+          <span style="font-size:11px;color:var(--mut);white-space:nowrap">${reads.length}/${totalUsers}</span>
+        </div>
+        ${reads.length?`<div style="font-size:11px;color:var(--mut);margin-top:3px">${readNames}</div>`:''}
+      </td>
+      <td>
+        <button class="btn btn-blue btn-sm" onclick="openArticleEditor(${a.id})" style="margin-right:4px">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteKBArticle(${a.id},'${esc(a.title)}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openAddKBCat(){
+  editingKBCatId=null;
+  document.getElementById('kbCatModalTitle').textContent='Add Category';
+  ['kbCatName','kbCatDesc'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('kbCatIcon').value='📄';
+  document.getElementById('kbCatOrder').value='0';
+  document.getElementById('kbCatModal').classList.add('show');
+}
+
+async function saveKBCat(){
+  const name=document.getElementById('kbCatName').value.trim();
+  const description=document.getElementById('kbCatDesc').value.trim();
+  const icon=document.getElementById('kbCatIcon').value.trim()||'📄';
+  const sort_order=parseInt(document.getElementById('kbCatOrder').value)||0;
+  if (!name){showToast('Name required','err');return}
+  const r=await fetch('/api/kb/categories',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,description,icon,sort_order})});
+  if (r.ok){closeModal('kbCatModal');showToast('Category added','ok');await loadKBAdmin();}
+  else{const d=await r.json();showToast(d.error,'err');}
+}
+
+async function deleteKBCat(id,name){
+  if (!confirm('Delete category "'+name+'"? Articles will be uncategorised.'))return;
+  const r=await fetch('/api/kb/categories/'+id,{method:'DELETE'});
+  if (r.ok){showToast('Category deleted','ok');await loadKBAdmin();}
+  else{const d=await r.json();showToast(d.error,'err');}
+}
+
+async function openArticleEditor(id){
+  editingKBArticleId=id;
+  document.getElementById('kbArticleModalTitle').textContent=id?'Edit Article':'New Article';
+  document.getElementById('kbArtTitle').value='';
+  document.getElementById('kbArtContent').value='';
+  document.getElementById('kbArtCat').value='';
+  if (id) {
+    const a=await fetch('/api/kb/articles/'+id).then(r=>r.json());
+    document.getElementById('kbArtTitle').value=a.title;
+    document.getElementById('kbArtContent').value=a.content;
+    document.getElementById('kbArtCat').value=a.category_id||'';
+  }
+  document.getElementById('kbArticleModal').classList.add('show');
+}
+
+async function saveArticle(){
+  const title=document.getElementById('kbArtTitle').value.trim();
+  const content=document.getElementById('kbArtContent').value;
+  const category_id=document.getElementById('kbArtCat').value||null;
+  if (!title){showToast('Title required','err');return}
+  if (editingKBArticleId) {
+    const r=await fetch('/api/kb/articles/'+editingKBArticleId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,content,category_id})});
+    if (r.ok){closeModal('kbArticleModal');showToast('Article saved','ok');await loadKBAdmin();}
+    else{const d=await r.json();showToast(d.error,'err');}
+  } else {
+    const r=await fetch('/api/kb/articles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,content,category_id})});
+    if (r.ok){closeModal('kbArticleModal');showToast('Article created','ok');await loadKBAdmin();}
+    else{const d=await r.json();showToast(d.error,'err');}
+  }
+}
+
+async function deleteKBArticle(id,name){
+  if (!confirm('Delete article "'+name+'"?'))return;
+  const r=await fetch('/api/kb/articles/'+id,{method:'DELETE'});
+  if (r.ok){showToast('Article deleted','ok');await loadKBAdmin();}
+  else{const d=await r.json();showToast(d.error,'err');}
+}
+
+// ===== CHANNELS =====
+async function loadChannels(){
+  const r=await fetch('/api/channels');channels=await r.json();renderChannels()
+}
+function renderChannels(){
+  const tb=document.getElementById('channelsTable');
+  tb.innerHTML=channels.map(ch=>`<tr>
+    <td><span style="color:var(--amb)">#</span> ${esc(ch.name)}</td>
+    <td style="color:var(--mut)">${esc(ch.description||'—')}</td>
+    <td>${!['general','announcements'].includes(ch.name)?`<button class="btn btn-danger btn-sm" onclick="deleteChannel(${ch.id},'${esc(ch.name)}')">Delete</button>`:'<span style="color:var(--mut);font-size:12px">Protected</span>'}</td>
+  </tr>`).join('');
+}
+function openAddChannel(){document.getElementById('addChannelModal').classList.add('show')}
+async function addChannel(){
+  const name=document.getElementById('newChName').value.trim();
+  const description=document.getElementById('newChDesc').value.trim();
+  if (!name){showToast('Channel name required','err');return}
+  const r=await fetch('/api/channels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,description})});
+  const d=await r.json();
+  if (!r.ok){showToast(d.error,'err');return}
+  closeModal('addChannelModal');['newChName','newChDesc'].forEach(id=>document.getElementById(id).value='');
+  showToast('#'+d.name+' created','ok');await loadChannels();
+}
+async function deleteChannel(id,name){
+  if (!confirm('Delete #'+name+'? All messages will be lost.'))return;
+  const r=await fetch('/api/channels/'+id,{method:'DELETE'});
+  if (r.ok){showToast('#'+name+' deleted','ok');await loadChannels()}
+  else{const d=await r.json();showToast(d.error,'err')}
+}
+
+// ===== UTILS =====
+function fmtDateShort(ds){if(!ds)return '—';return new Date(ds+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'})}
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('show')}));
+function initials(n){return n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}
+function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+let tt;
+function showToast(msg,type='ok'){const t=document.getElementById('toast');t.textContent=(type==='ok'?'✓ ':'✕ ')+msg;t.className='toast '+type;t.style.display='block';clearTimeout(tt);tt=setTimeout(()=>{t.style.display='none'},3500)}
+
+init();
+</script>
+</body>
+</html>

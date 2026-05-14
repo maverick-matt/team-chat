@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maverick Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--sb:#111111;--sbh:#1a1a1a;--sba:#0d1b2e;--bg:#161616;--sur:#1e1e1e;--brd:#2a2a2a;--amb:#008ced;--amb-h:#0d7ec9;--txt:#F5F5F5;--mut:#6B7280;--mut2:#4B4F58;--grn:#10B981;--red:#EF4444;--blu:#3B82F6}
+html,body{height:100%;height:100dvh;overflow:hidden}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--txt);display:flex;height:100vh;height:100dvh}
+
+/* SIDEBAR */
+.sidebar{width:240px;min-width:240px;background:var(--sb);border-right:1px solid var(--brd);display:flex;flex-direction:column;overflow:hidden}
+.sb-head{padding:16px 14px 12px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between}
+.ws-name{font-family:'Syne',sans-serif;font-weight:800;font-size:15px}
+.ws-name span{color:var(--amb)}
+.sb-scroll{flex:1;overflow-y:auto;padding:8px 0}
+.sb-scroll::-webkit-scrollbar{width:4px}
+.sb-scroll::-webkit-scrollbar-thumb{background:var(--brd);border-radius:2px}
+.mod-nav{padding:6px 0 2px}
+.mod-item{display:flex;align-items:center;gap:9px;padding:8px 14px;cursor:pointer;border-radius:7px;margin:1px 6px;font-size:13px;font-weight:500;color:var(--mut);transition:background .15s,color .15s}
+.mod-item:hover{background:var(--sbh);color:var(--txt)}
+.mod-item.active{background:var(--sba);color:var(--txt)}
+.mod-item .mi{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.mod-item.active .mod-label{color:var(--amb)}
+.mod-divider{height:1px;background:var(--brd);margin:6px 14px}
+.sec-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.8px;color:var(--mut2);padding:12px 14px 4px;display:flex;align-items:center;justify-content:space-between}
+.sec-label button{background:none;border:none;color:var(--mut);cursor:pointer;font-size:18px;line-height:1;padding:0;transition:color .15s}
+.sec-label button:hover{color:var(--txt)}
+.nav-item{display:flex;align-items:center;gap:8px;padding:6px 14px;cursor:pointer;border-radius:6px;margin:1px 6px;font-size:13px;color:var(--mut);transition:background .15s,color .15s;position:relative}
+.nav-item:hover{background:var(--sbh);color:var(--txt)}
+.nav-item.active{background:var(--sba);color:var(--txt)}
+.hash{color:var(--mut2);font-size:15px}
+.nav-item.active .hash{color:var(--amb)}
+.av-sm{width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0;position:relative}
+.od{position:absolute;bottom:-2px;right:-2px;width:7px;height:7px;background:var(--grn);border-radius:50%;border:2px solid var(--sb)}
+.badge{margin-left:auto;background:var(--amb);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center}
+.sb-foot{padding:10px 14px;border-top:1px solid var(--brd);display:flex;align-items:center;gap:9px;flex-shrink:0}
+.my-av{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
+.my-info{flex:1;min-width:0}
+.my-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.my-status{font-size:10px;color:var(--grn)}
+.icon-btn{background:none;border:none;color:var(--mut);cursor:pointer;padding:4px;border-radius:6px;display:flex;align-items:center;transition:color .15s,background .15s;font-size:15px}
+.icon-btn:hover{color:var(--txt);background:var(--sbh)}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.panel{flex:1;display:none;flex-direction:column;overflow:hidden}
+.panel.active{display:flex}
+.ph{padding:0 24px;height:54px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--bg)}
+.ph-icon{font-size:20px}
+.ph-title{font-family:'Syne',sans-serif;font-weight:700;font-size:16px}
+.ph-sub{font-size:13px;color:var(--mut);margin-left:4px}
+.ph-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.btn{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;padding:7px 14px;border-radius:7px;cursor:pointer;border:none;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn-amb{background:var(--amb);color:#fff}
+.btn-ghost{background:var(--sur);color:var(--txt);border:1px solid var(--brd)}
+.btn-danger{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.btn-blue{background:rgba(59,130,246,.15);color:var(--blu);border:1px solid rgba(59,130,246,.3)}
+.scroll-body{flex:1;overflow-y:auto;padding:24px}
+.scroll-body::-webkit-scrollbar{width:6px}
+.scroll-body::-webkit-scrollbar-thumb{background:var(--brd);border-radius:3px}
+
+/* DASHBOARD */
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.dash-card{background:var(--sur);border:1px solid var(--brd);border-radius:14px;padding:20px}
+.dash-card.full{grid-column:1/-1}
+.dash-card h3{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
+.stat-val{font-family:'Syne',sans-serif;font-size:32px;font-weight:800}
+.stat-label{font-size:12px;color:var(--mut);margin-top:2px}
+.clock-status-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:500}
+.clocked-in{background:rgba(16,185,129,.15);color:var(--grn);border:1px solid rgba(16,185,129,.3)}
+.clocked-out{background:rgba(107,114,128,.15);color:var(--mut);border:1px solid rgba(107,114,128,.3)}
+.shift-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--brd)}
+.shift-item:last-child{border-bottom:none}
+.shift-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.shift-info{flex:1}
+.shift-time{font-size:12px;color:var(--mut)}
+
+/* TIME CLOCK */
+.tc-wrap{display:flex;gap:20px;padding:24px;flex:1;overflow:hidden}
+.tc-left{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:16px}
+.tc-right{flex:1;overflow-y:auto}
+.tc-card{background:var(--sur);border:1px solid var(--brd);border-radius:16px;padding:28px;text-align:center}
+.tc-livetime{font-family:'Syne',sans-serif;font-size:42px;font-weight:800;letter-spacing:-1px;margin-bottom:4px}
+.tc-livedate{font-size:13px;color:var(--mut);margin-bottom:24px}
+.tc-store-sel{text-align:left;margin-bottom:16px}
+.tc-store-sel label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);margin-bottom:6px}
+.tc-store-sel select{width:100%;background:var(--bg);border:1px solid var(--brd);border-radius:8px;color:var(--txt);font-family:'DM Sans';font-size:13px;padding:9px 12px;outline:none}
+.tc-store-sel select:focus{border-color:var(--amb)}
+.gps-row{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:16px;padding:10px 14px;border-radius:8px;background:var(--bg);border:1px solid var(--brd)}
+.gps-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--mut)}
+.gps-dot.ok{background:var(--grn)}
+.gps-dot.err{background:var(--red)}
+.gps-dot.pulse{animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.tc-btn{width:100%;padding:16px;border-radius:12px;font-family:'Syne',sans-serif;font-size:16px;font-weight:700;border:none;cursor:pointer;transition:all .2s}
+.tc-btn.in{background:var(--grn);color:#fff}
+.tc-btn.in:hover{background:#059669}
+.tc-btn.out{background:var(--red);color:#fff}
+.tc-btn.out:hover{background:#DC2626}
+.tc-btn:disabled{opacity:.5;cursor:not-allowed}
+.tc-session{margin-top:16px;padding:12px;background:rgba(0,140,237,.1);border:1px solid rgba(0,140,237,.25);border-radius:10px;font-size:13px;text-align:center;color:var(--amb)}
+.tc-session .elapsed{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;display:block;margin-top:4px}
+.time-records{background:var(--sur);border:1px solid var(--brd);border-radius:14px;overflow:hidden}
+.time-records h3{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;padding:16px 20px;border-bottom:1px solid var(--brd)}
+.tr-row{display:flex;align-items:center;padding:12px 20px;border-bottom:1px solid var(--brd);font-size:13px;gap:12px}
+.tr-row:last-child{border-bottom:none}
+.tr-store{font-weight:500;flex:1}
+.tr-date{color:var(--mut);font-size:12px}
+.tr-dur{font-family:'Syne',sans-serif;font-weight:700;color:var(--amb)}
+.tr-active{color:var(--grn);font-weight:600}
+
+/* SCHEDULE */
+.sched-wrap{padding:20px 24px;flex:1;overflow-y:auto}
+.week-nav{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.week-nav button{background:var(--sur);border:1px solid var(--brd);color:var(--txt);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;transition:background .15s}
+.week-nav button:hover{background:var(--sbh)}
+.week-label{font-family:'Syne',sans-serif;font-weight:700;font-size:15px}
+.week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
+.day-col{background:var(--sur);border:1px solid var(--brd);border-radius:12px;overflow:hidden}
+.day-head{padding:10px 12px;border-bottom:1px solid var(--brd);text-align:center}
+.day-name{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);font-weight:500}
+.day-num{font-family:'Syne',sans-serif;font-size:20px;font-weight:800}
+.day-num.today{color:var(--amb)}
+.day-shifts{padding:8px}
+.shift-block{background:rgba(0,140,237,.12);border:1px solid rgba(0,140,237,.3);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:12px}
+.shift-block .sb-time{font-weight:600;color:var(--amb)}
+.shift-block .sb-store{color:var(--mut);margin-top:2px}
+.shift-block .sb-role{color:var(--txt);font-size:11px}
+.no-shifts{text-align:center;color:var(--mut2);font-size:12px;padding:12px 0}
+
+/* FORMS */
+.forms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;padding:24px}
+.form-card{background:var(--sur);border:1px solid var(--brd);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s}
+.form-card:hover{border-color:var(--amb)}
+.form-card-icon{font-size:28px;margin-bottom:10px}
+.form-card-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:6px}
+.form-card-desc{font-size:13px;color:var(--mut);line-height:1.5}
+.form-card-footer{margin-top:14px;padding-top:14px;border-top:1px solid var(--brd);font-size:12px;color:var(--mut)}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;color:var(--mut);gap:8px;padding:40px}
+.empty-state .ei{font-size:48px;margin-bottom:8px}
+.empty-state h3{font-family:'Syne',sans-serif;font-size:18px;color:var(--txt)}
+
+/* KNOWLEDGE BASE */
+.kb-layout{display:flex;gap:0;flex:1;overflow:hidden}
+.kb-cats{width:220px;flex-shrink:0;border-right:1px solid var(--brd);overflow-y:auto;padding:12px 0}
+.kb-cat-item{display:flex;align-items:center;gap:9px;padding:9px 16px;cursor:pointer;font-size:13px;color:var(--mut);transition:background .15s,color .15s}
+.kb-cat-item:hover{background:var(--sbh);color:var(--txt)}
+.kb-cat-item.active{background:var(--sba);color:var(--txt)}
+.kb-cat-item .kci{font-size:16px;width:20px;text-align:center}
+.kb-main{flex:1;overflow-y:auto;padding:24px}
+.kb-search{background:var(--sur);border:1px solid var(--brd);border-radius:8px;color:var(--txt);font-family:'DM Sans';font-size:13px;padding:8px 14px;outline:none;width:240px;transition:border-color .2s}
+.kb-search:focus{border-color:var(--amb)}
+.kb-article-list{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.kb-article-item{background:var(--sur);border:1px solid var(--brd);border-radius:12px;padding:16px 20px;cursor:pointer;transition:border-color .2s}
+.kb-article-item:hover{border-color:var(--amb)}
+.kb-article-item h4{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:4px}
+.kb-article-item .ka-meta{font-size:12px;color:var(--mut)}
+.kb-article-view{max-width:760px}
+.kb-back-btn{background:none;border:none;color:var(--amb);cursor:pointer;font-size:13px;padding:0;margin-bottom:16px;display:flex;align-items:center;gap:4px}
+.kb-article-content{background:var(--sur);border:1px solid var(--brd);border-radius:14px;padding:28px}
+.kb-article-content h1{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;margin-bottom:8px}
+.kb-article-content .ka-meta{font-size:12px;color:var(--mut);margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--brd)}
+.kb-article-body{font-size:14px;line-height:1.8;white-space:pre-wrap;word-wrap:break-word}
+
+/* CHAT */
+.chat-head{padding:0 20px;height:54px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--bg)}
+.chat-title{font-family:'Syne',sans-serif;font-weight:700;font-size:15px}
+.chat-desc{font-size:13px;color:var(--mut);margin-left:8px}
+.messages{flex:1;overflow-y:auto;padding:20px 20px 8px;display:flex;flex-direction:column;gap:2px}
+.messages::-webkit-scrollbar{width:6px}
+.messages::-webkit-scrollbar-thumb{background:var(--brd);border-radius:3px}
+.msg-group{margin-bottom:12px}
+.msg-head{display:flex;align-items:baseline;gap:10px;margin-bottom:3px}
+.msg-av{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;margin-top:2px}
+.msg-body{flex:1;min-width:0}
+.msg-sender{font-size:14px;font-weight:600}
+.msg-time{font-size:11px;color:var(--mut)}
+.msg-text{font-size:14px;line-height:1.55;color:#D1CFC9;padding-left:42px;word-wrap:break-word}
+.msg-text.first{padding-left:0}
+.day-div{display:flex;align-items:center;gap:12px;margin:20px 0 16px;color:var(--mut2);font-size:12px}
+.day-div::before,.day-div::after{content:'';flex:1;height:1px;background:var(--brd)}
+.input-area{padding:10px 20px 14px;flex-shrink:0}
+.input-box{background:var(--sur);border:1px solid var(--brd);border-radius:12px;display:flex;align-items:flex-end;gap:10px;padding:10px 14px;transition:border-color .2s}
+.input-box:focus-within{border-color:var(--amb)}
+#msgInput{flex:1;background:none;border:none;outline:none;color:var(--txt);font-family:'DM Sans',sans-serif;font-size:14px;resize:none;max-height:120px;line-height:1.5}
+#msgInput::placeholder{color:var(--mut2)}
+.send-btn{background:var(--amb);border:none;border-radius:8px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s;color:#fff;font-size:15px}
+.send-btn:hover{background:var(--amb-h)}
+.typing-ind{font-size:12px;color:var(--mut);padding:3px 20px 0;height:18px}
+.admin-tag{font-size:10px;background:rgba(0,140,237,.15);color:var(--amb);border:1px solid rgba(0,140,237,.3);border-radius:4px;padding:1px 5px;vertical-align:middle;margin-left:4px}
+
+/* MOBILE TOP BAR */
+.mob-bar{display:none;align-items:center;gap:12px;height:52px;padding:0 16px;background:var(--sb);border-bottom:1px solid var(--brd);flex-shrink:0;z-index:10}
+.mob-menu-btn{background:none;border:none;color:var(--txt);font-size:22px;line-height:1;cursor:pointer;padding:4px;display:flex;align-items:center;flex-shrink:0}
+.mob-bar img{flex:1;height:22px;width:auto;object-fit:contain;object-position:left}
+/* SIDEBAR OVERLAY BACKDROP */
+.sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:299}
+.sb-overlay.show{display:block}
+
+/* MODAL */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center}
+.overlay.show{display:flex}
+.modal{background:var(--sur);border:1px solid var(--brd);border-radius:16px;padding:28px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto}
+.modal h2{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:18px}
+.fld-label{display:block;font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 5px;font-weight:500}
+.fld-label:first-child{margin-top:0}
+.fld{width:100%;background:var(--bg);border:1px solid var(--brd);border-radius:8px;color:var(--txt);font-family:'DM Sans';font-size:13px;padding:9px 12px;outline:none;transition:border-color .2s}
+.fld:focus{border-color:var(--amb)}
+.fld-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+.fld-select option{background:var(--bg)}
+textarea.fld{resize:vertical;min-height:80px;line-height:1.5}
+.modal-actions{display:flex;gap:10px;margin-top:22px;justify-content:flex-end}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--sur);border:1px solid var(--brd);color:var(--txt);padding:10px 18px;border-radius:10px;font-size:13px;z-index:999;display:none;animation:slideUp .2s ease}
+.toast.ok{border-color:var(--grn)}.toast.err{border-color:var(--red);color:var(--red)}
+
+/* ===== MOBILE RESPONSIVE ===== */
+@media(max-width:768px){
+  body{flex-direction:column}
+  .mob-bar{display:flex}
+  .sidebar{position:fixed;top:0;left:-240px;height:100%;height:100dvh;z-index:300;transition:transform .25s ease,left .25s ease;box-shadow:6px 0 24px rgba(0,0,0,.5)}
+  .sidebar.open{left:0}
+  .main{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+  /* Panel header */
+  .ph{padding:0 14px;height:48px}
+  .ph-title{font-size:14px}
+  .ph-sub{display:none}
+  /* Scroll body */
+  .scroll-body{padding:14px}
+  /* Dashboard */
+  .dash-grid{grid-template-columns:1fr;gap:12px}
+  .dash-card.full{grid-column:1}
+  .stat-val{font-size:26px}
+  /* Time clock */
+  .tc-wrap{flex-direction:column;padding:14px;gap:14px;overflow-y:auto}
+  .tc-left{width:100%}
+  .tc-livetime{font-size:34px}
+  .tc-livedate{font-size:12px;margin-bottom:18px}
+  /* Schedule */
+  .sched-wrap{padding:14px}
+  .week-nav{gap:8px}
+  .week-label{font-size:13px}
+  .week-grid{display:flex;overflow-x:auto;gap:8px;padding-bottom:8px;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory}
+  .week-grid::-webkit-scrollbar{height:3px}
+  .week-grid::-webkit-scrollbar-thumb{background:var(--brd);border-radius:2px}
+  .day-col{min-width:136px;flex-shrink:0;scroll-snap-align:start}
+  /* Forms */
+  .forms-grid{grid-template-columns:1fr;padding:14px;gap:12px}
+  /* KB */
+  .kb-layout{flex-direction:column}
+  .kb-cats{width:100%;max-height:none;border-right:none;border-bottom:1px solid var(--brd);display:flex;overflow-x:auto;padding:6px 8px;gap:4px;flex-direction:row;-webkit-overflow-scrolling:touch}
+  .kb-cats::-webkit-scrollbar{height:3px}
+  .kb-cats::-webkit-scrollbar-thumb{background:var(--brd);border-radius:2px}
+  .kb-cat-item{white-space:nowrap;border-radius:20px;padding:7px 14px;flex-shrink:0;font-size:12px}
+  .kb-cat-item.active{background:var(--amb);color:#fff}
+  .kb-main{padding:14px}
+  /* Chat */
+  .chat-head{padding:0 14px;height:48px}
+  .msg-text{font-size:13px}
+  .input-area{padding:8px 12px 12px}
+  .messages{padding:12px 12px 6px}
+  /* Modals */
+  .overlay{align-items:flex-end}
+  .modal{width:100% !important;max-width:100%;margin:0;border-radius:16px 16px 0 0;padding:20px 18px;max-height:90dvh}
+  .modal-wide{width:100% !important}
+  .form-row{grid-template-columns:1fr}
+  /* Toast */
+  .toast{left:12px;right:12px;bottom:16px;text-align:center}
+  /* Module items */
+  .mod-item{padding:10px 14px}
+  .nav-item{padding:8px 14px}
+}
+</style>
+</head>
+<body>
+<!-- MOBILE TOP BAR -->
+<div class="mob-bar">
+  <button class="mob-menu-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+  <img src="/images/maverick-logo.png" alt="Maverick Campers">
+</div>
+<!-- SIDEBAR BACKDROP -->
+<div class="sb-overlay" id="sbOverlay" onclick="closeSidebar()"></div>
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sb-head">
+    <img src="/images/maverick-logo.png" alt="Maverick Campers" style="height:26px;width:auto;flex:1;min-width:0;object-fit:contain;object-position:left">
+    <button class="icon-btn" id="adminBtn" title="Admin Panel" onclick="location.href='/admin.html'" style="display:none;flex-shrink:0">⚙️</button>
+  </div>
+  <div class="sb-scroll">
+    <div class="mod-nav">
+      <div class="mod-item active" data-module="dashboard" onclick="switchModule('dashboard')">
+        <span class="mi">🏠</span><span class="mod-label">Dashboard</span>
+      </div>
+      <div class="mod-item" data-module="timeclock" onclick="switchModule('timeclock')">
+        <span class="mi">⏰</span><span class="mod-label">Time Clock</span>
+      </div>
+      <div class="mod-item" data-module="schedule" onclick="switchModule('schedule')">
+        <span class="mi">📅</span><span class="mod-label">Schedule</span>
+      </div>
+      <div class="mod-item" data-module="forms" onclick="switchModule('forms')">
+        <span class="mi">📋</span><span class="mod-label">Forms</span>
+      </div>
+      <div class="mod-item" data-module="kb" onclick="switchModule('kb')">
+        <span class="mi">📚</span><span class="mod-label">Knowledge Base</span>
+      </div>
+    </div>
+    <div class="mod-divider"></div>
+    <div class="mod-item" data-module="chat" onclick="switchModule('chat')" style="margin-bottom:4px">
+      <span class="mi">💬</span><span class="mod-label">Chat</span>
+      <span id="chatBadgeNav" class="badge" style="display:none"></span>
+    </div>
+    <!-- Chat sub-nav -->
+    <div id="sbChat" style="display:none">
+      <div class="sec-label">Channels<button id="addChBtn" style="display:none" onclick="promptAddChannel()">＋</button></div>
+      <div id="channelList"></div>
+      <div class="sec-label">Direct Messages</div>
+      <div id="dmList"></div>
+    </div>
+  </div>
+  <div class="sb-foot">
+    <div class="my-av" id="myAvatar"></div>
+    <div class="my-info"><div class="my-name" id="myName"></div><div class="my-status">● Online</div></div>
+    <button class="icon-btn" title="Sign out" onclick="logout()">⏻</button>
+  </div>
+</div>
+
+<!-- MAIN PANELS -->
+<div class="main">
+
+  <!-- DASHBOARD -->
+  <div class="panel active" id="panel-dashboard">
+    <div class="ph"><span class="ph-icon">🏠</span><span class="ph-title">Dashboard</span><span class="ph-sub" id="dashGreeting"></span></div>
+    <div class="scroll-body">
+      <div class="dash-grid">
+        <div class="dash-card">
+          <h3>Clock Status</h3>
+          <div id="dashClockStatus"><span class="clock-status-badge clocked-out">⏸ Not clocked in</span></div>
+          <div id="dashClockStore" style="font-size:12px;color:var(--mut);margin-top:8px"></div>
+        </div>
+        <div class="dash-card">
+          <h3>This Week</h3>
+          <div class="stat-val" id="dashHours">0h</div>
+          <div class="stat-label">Hours worked</div>
+        </div>
+        <div class="dash-card full">
+          <h3>Today's Shifts</h3>
+          <div id="dashShifts"><div style="color:var(--mut);font-size:13px">No shifts scheduled today</div></div>
+        </div>
+        <div class="dash-card full">
+          <h3>Upcoming This Week</h3>
+          <div id="dashUpcoming"><div style="color:var(--mut);font-size:13px">No upcoming shifts</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIME CLOCK -->
+  <div class="panel" id="panel-timeclock">
+    <div class="ph"><span class="ph-icon">⏰</span><span class="ph-title">Time Clock</span></div>
+    <div class="tc-wrap">
+      <div class="tc-left">
+        <div class="tc-card">
+          <div class="tc-livetime" id="tcTime">--:--:--</div>
+          <div class="tc-livedate" id="tcDate"></div>
+          <div class="tc-store-sel" id="tcStoreSel">
+            <label>Select Location</label>
+            <select class="fld fld-select" id="tcStoreId"></select>
+          </div>
+          <div class="gps-row" id="gpsRow">
+            <div class="gps-dot pulse" id="gpsDot"></div>
+            <span id="gpsMsg">Acquiring GPS location...</span>
+          </div>
+          <button class="tc-btn in" id="tcBtn" onclick="clockAction()" disabled>Clock In</button>
+          <div class="tc-session" id="tcSession" style="display:none">
+            Working at <strong id="tcStoreName"></strong>
+            <span class="elapsed" id="tcElapsed">00:00:00</span>
+          </div>
+        </div>
+      </div>
+      <div class="tc-right">
+        <div class="time-records">
+          <h3>Recent Time Entries</h3>
+          <div id="tcRecords"><div class="tr-row" style="color:var(--mut)">Loading...</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCHEDULE -->
+  <div class="panel" id="panel-schedule">
+    <div class="ph">
+      <span class="ph-icon">📅</span><span class="ph-title">My Schedule</span>
+      <div class="ph-actions">
+        <div class="week-nav" style="margin:0">
+          <button onclick="schedNav(-1)">&#8592;</button>
+          <span class="week-label" id="schedWeekLabel"></span>
+          <button onclick="schedNav(1)">&#8594;</button>
+        </div>
+      </div>
+    </div>
+    <div class="sched-wrap">
+      <div class="week-grid" id="schedGrid"></div>
+    </div>
+  </div>
+
+  <!-- FORMS -->
+  <div class="panel" id="panel-forms">
+    <div class="ph"><span class="ph-icon">📋</span><span class="ph-title">Forms</span></div>
+    <div id="formsBody" style="flex:1;overflow:hidden;display:flex;flex-direction:column"></div>
+  </div>
+
+  <!-- KNOWLEDGE BASE -->
+  <div class="panel" id="panel-kb">
+    <div class="ph">
+      <span class="ph-icon">📚</span><span class="ph-title">Knowledge Base</span>
+      <div class="ph-actions"><input class="kb-search" id="kbSearch" placeholder="Search articles..." oninput="kbFilter(this.value)"></div>
+    </div>
+    <div class="kb-layout">
+      <div class="kb-cats" id="kbCatList">
+        <div class="kb-cat-item active" data-cat="" onclick="kbSelectCat('',this)"><span class="kci">🗂️</span> All Articles</div>
+      </div>
+      <div class="kb-main" id="kbMain"></div>
+    </div>
+  </div>
+
+  <!-- CHAT -->
+  <div class="panel" id="panel-chat" style="display:none;flex-direction:column">
+    <div class="chat-head" id="chatHead"><span style="color:var(--mut)">Select a channel or team member</span></div>
+    <div class="messages" id="messages">
+      <div class="empty-state"><div class="ei">💬</div><h3>Welcome to Maverick Chat</h3><p>Select a channel or DM to get started</p></div>
+    </div>
+    <div class="typing-ind" id="typingInd"></div>
+    <div class="input-area">
+      <div class="input-box">
+        <textarea id="msgInput" rows="1" placeholder="Select a conversation..." disabled></textarea>
+        <button class="send-btn" onclick="sendMessage()">&#10148;</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- FORM FILL MODAL -->
+<div class="overlay" id="formModal">
+  <div class="modal" style="width:560px">
+    <h2 id="formModalTitle"></h2>
+    <p id="formModalDesc" style="font-size:13px;color:var(--mut);margin-bottom:20px"></p>
+    <div id="formModalFields"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('formModal')">Cancel</button>
+      <button class="btn btn-amb" onclick="submitForm()">Submit</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ====== STATE ======
+let me=null, socket=null;
+let active=null, channels=[], users=[], onlineIds=new Set(), unread={}, typingTimer=null;
+let myStores=[], tcStatus=null, tcInterval=null, tcElapsedTimer=null, gpsCoords=null;
+let schedOffset=0, myShifts=[];
+let kbCats=[], kbAllArticles=[], kbCurCat='', kbSearchVal='';
+let activeForms=[], curFormId=null;
+
+// ====== INIT ======
+async function init() {
+  try {
+    const r=await fetch('/api/me');
+    if (!r.ok){location.href='/';return}
+    me=await r.json();
+  } catch {location.href='/';return}
+  const av=document.getElementById('myAvatar');
+  av.textContent=initials(me.name);av.style.background=me.avatar_color;
+  document.getElementById('myName').textContent=me.name;
+  document.getElementById('dashGreeting').textContent='Good '+timeOfDay()+', '+me.name.split(' ')[0];
+  if (me.role==='admin'||me.role==='manager') document.getElementById('adminBtn').style.display='flex';
+  if (me.role==='admin') document.getElementById('addChBtn').style.display='block';
+  await Promise.all([fetchMyStores(),fetchClockStatus()]);
+  loadDashboard();
+  startClockFace();
+  connectSocket();
+}
+
+function timeOfDay(){const h=new Date().getHours();return h<12?'morning':h<17?'afternoon':'evening'}
+
+// ====== MODULE SWITCHING ======
+function switchModule(name) {
+  document.querySelectorAll('.mod-item').forEach(i=>i.classList.remove('active'));
+  const mi=document.querySelector(`.mod-item[data-module="${name}"]`);
+  if (mi) mi.classList.add('active');
+  document.querySelectorAll('.panel').forEach(p=>{p.classList.remove('active');p.style.display='none'});
+  const panel=document.getElementById('panel-'+name);
+  panel.style.display='flex';panel.classList.add('active');
+  document.getElementById('sbChat').style.display=name==='chat'?'block':'none';
+  if(window.innerWidth<=768) closeSidebar();
+  if (name==='dashboard') loadDashboard();
+  else if (name==='timeclock') loadTimeclock();
+  else if (name==='schedule') loadSchedule();
+  else if (name==='forms') loadForms();
+  else if (name==='kb') loadKB();
+  else if (name==='chat') {loadChannels();loadUsers();loadUnread();connectSocket();}
+}
+
+// ====== DASHBOARD ======
+async function loadDashboard() {
+  await fetchClockStatus();
+  const statusEl=document.getElementById('dashClockStatus');
+  const storeEl=document.getElementById('dashClockStore');
+  if (tcStatus?.clocked_in) {
+    statusEl.innerHTML=`<span class="clock-status-badge clocked-in">● Clocked In</span>`;
+    storeEl.textContent='At '+tcStatus.record.store_name+' since '+fmtTime(tcStatus.record.clock_in_at);
+  } else {
+    statusEl.innerHTML=`<span class="clock-status-badge clocked-out">⏸ Not clocked in</span>`;
+    storeEl.textContent='';
+  }
+  // Hours this week
+  try {
+    const recs=await fetch('/api/clock/records').then(r=>r.json());
+    const weekStart=getWeekStart(new Date());
+    let totalMs=0;
+    recs.forEach(r=>{
+      const cIn=new Date(r.clock_in_at);
+      if (cIn>=weekStart){
+        const cOut=r.clock_out_at?new Date(r.clock_out_at):new Date();
+        totalMs+=cOut-cIn;
+      }
+    });
+    document.getElementById('dashHours').textContent=fmtHours(totalMs);
+  } catch{}
+  // Today's shifts
+  const today=new Date().toISOString().slice(0,10);
+  try {
+    const shifts=await fetch('/api/my/shifts?from='+today).then(r=>r.json());
+    const todayShifts=shifts.filter(s=>s.shift_date===today);
+    const upcomingShifts=shifts.filter(s=>s.shift_date>today).slice(0,5);
+    const tsEl=document.getElementById('dashShifts');
+    if (todayShifts.length) {
+      tsEl.innerHTML=todayShifts.map(s=>`<div class="shift-item">
+        <div class="shift-dot" style="background:var(--amb)"></div>
+        <div class="shift-info"><div style="font-size:13px;font-weight:500">${s.store_name}${s.role?' · '+s.role:''}</div>
+        <div class="shift-time">${s.start_time} – ${s.end_time}</div></div>
+      </div>`).join('');
+    } else {
+      tsEl.innerHTML='<div style="color:var(--mut);font-size:13px">No shifts scheduled today</div>';
+    }
+    const upEl=document.getElementById('dashUpcoming');
+    if (upcomingShifts.length) {
+      upEl.innerHTML=upcomingShifts.map(s=>`<div class="shift-item">
+        <div class="shift-dot" style="background:var(--blu)"></div>
+        <div class="shift-info"><div style="font-size:13px;font-weight:500">${fmtDate(s.shift_date)} · ${s.store_name}${s.role?' · '+s.role:''}</div>
+        <div class="shift-time">${s.start_time} – ${s.end_time}</div></div>
+      </div>`).join('');
+    } else {
+      upEl.innerHTML='<div style="color:var(--mut);font-size:13px">No upcoming shifts this week</div>';
+    }
+  } catch{}
+}
+
+function getWeekStart(d){const day=d.getDay();const diff=d.getDate()-day+(day===0?-6:1);return new Date(d.setDate(diff))}
+function fmtHours(ms){const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);return h+'h'+(m>0?' '+m+'m':'')}
+function fmtDate(ds){return new Date(ds+'T00:00:00').toLocaleDateString('en-AU',{weekday:'short',month:'short',day:'numeric'})}
+function fmtTime(dt){return new Date(dt).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'})}
+function fmtDur(ms){const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);const s=Math.floor((ms%60000)/1000);return pad(h)+':'+pad(m)+':'+pad(s)}
+function pad(n){return String(n).padStart(2,'0')}
+
+// ====== TIME CLOCK ======
+async function fetchMyStores(){
+  const r=await fetch('/api/users/'+0+'/stores').catch(()=>null);
+  // Use current user's assigned stores
+  try {
+    const stores=await fetch('/api/users/'+me.id+'/stores').then(r=>r.json());
+    myStores=stores;
+  } catch {myStores=[];}
+}
+async function fetchClockStatus(){
+  try {tcStatus=await fetch('/api/clock/status').then(r=>r.json());}
+  catch {tcStatus={clocked_in:false,record:null};}
+}
+
+async function loadTimeclock(){
+  await fetchClockStatus();
+  const sel=document.getElementById('tcStoreId');
+  sel.innerHTML='';
+  if (me.role==='admin') {
+    const all=await fetch('/api/stores').then(r=>r.json());
+    all.forEach(s=>sel.add(new Option(s.name,s.id)));
+  } else {
+    if (!myStores.length){
+      sel.innerHTML='<option value="">No stores assigned</option>';
+    } else {
+      myStores.forEach(s=>sel.add(new Option(s.name,s.id)));
+    }
+  }
+  updateTCUI();
+  getGPS();
+  loadTCRecords();
+  startElapsedTimer();
+}
+
+function updateTCUI(){
+  const btn=document.getElementById('tcBtn');
+  const sess=document.getElementById('tcSession');
+  const storeSel=document.getElementById('tcStoreSel');
+  if (tcStatus?.clocked_in) {
+    btn.textContent='Clock Out';btn.className='tc-btn out';btn.disabled=false;
+    sess.style.display='block';
+    document.getElementById('tcStoreName').textContent=tcStatus.record.store_name;
+    storeSel.style.display='none';
+    document.getElementById('gpsRow').style.display='none';
+  } else {
+    btn.textContent='Clock In';btn.className='tc-btn in';
+    sess.style.display='none';
+    storeSel.style.display='block';
+    document.getElementById('gpsRow').style.display='flex';
+  }
+}
+
+function getGPS(){
+  if (tcStatus?.clocked_in) return;
+  const dot=document.getElementById('gpsDot');
+  const msg=document.getElementById('gpsMsg');
+  dot.className='gps-dot pulse';msg.textContent='Acquiring GPS location...';
+  document.getElementById('tcBtn').disabled=true;
+  if (!navigator.geolocation){
+    dot.className='gps-dot err';msg.textContent='GPS not available on this device';
+    if (me.role==='admin') document.getElementById('tcBtn').disabled=false;
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      gpsCoords={lat:pos.coords.latitude,lng:pos.coords.longitude};
+      dot.className='gps-dot ok';
+      msg.textContent=`GPS acquired (±${Math.round(pos.coords.accuracy)}m accuracy)`;
+      document.getElementById('tcBtn').disabled=false;
+    },
+    err=>{
+      gpsCoords=null;
+      dot.className='gps-dot err';
+      msg.textContent='GPS unavailable: '+err.message;
+      if (me.role==='admin') document.getElementById('tcBtn').disabled=false;
+    },
+    {enableHighAccuracy:true,timeout:15000}
+  );
+}
+
+async function clockAction(){
+  const btn=document.getElementById('tcBtn');
+  btn.disabled=true;
+  if (tcStatus?.clocked_in) {
+    const r=await fetch('/api/clock/out',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:gpsCoords?.lat||null,lng:gpsCoords?.lng||null})});
+    const d=await r.json();
+    if (!r.ok){showToast(d.error,'err');btn.disabled=false;return}
+    showToast('Clocked out successfully','ok');
+    await fetchClockStatus();updateTCUI();loadTCRecords();loadDashboard();
+    if (tcElapsedTimer){clearInterval(tcElapsedTimer);tcElapsedTimer=null;}
+  } else {
+    const storeId=document.getElementById('tcStoreId').value;
+    if (!storeId){showToast('Please select a location','err');btn.disabled=false;return}
+    const r=await fetch('/api/clock/in',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:gpsCoords?.lat||null,lng:gpsCoords?.lng||null,store_id:parseInt(storeId)})});
+    const d=await r.json();
+    if (!r.ok){showToast(d.error,'err');btn.disabled=false;return}
+    showToast('Clocked in at '+d.store_name,'ok');
+    await fetchClockStatus();updateTCUI();loadTCRecords();loadDashboard();startElapsedTimer();
+  }
+}
+
+function startElapsedTimer(){
+  if (tcElapsedTimer) clearInterval(tcElapsedTimer);
+  tcElapsedTimer=setInterval(()=>{
+    if (tcStatus?.clocked_in&&tcStatus.record){
+      const ms=Date.now()-new Date(tcStatus.record.clock_in_at).getTime();
+      const el=document.getElementById('tcElapsed');
+      if (el) el.textContent=fmtDur(ms);
+    }
+  },1000);
+}
+
+async function loadTCRecords(){
+  try {
+    const recs=await fetch('/api/clock/records').then(r=>r.json());
+    const el=document.getElementById('tcRecords');
+    if (!recs.length){el.innerHTML='<div class="tr-row" style="color:var(--mut)">No time entries yet</div>';return}
+    el.innerHTML=recs.map(r=>{
+      const isActive=!r.clock_out_at;
+      const dur=isActive?'<span class="tr-active">Active</span>':fmtDurShort(r.clock_in_at,r.clock_out_at);
+      return `<div class="tr-row">
+        <div class="tr-store">${r.store_name}</div>
+        <div class="tr-date">${fmtDate(r.clock_in_at.slice(0,10))}</div>
+        <div style="font-size:12px;color:var(--mut)">${fmtTime(r.clock_in_at)}${r.clock_out_at?' – '+fmtTime(r.clock_out_at):''}</div>
+        <div class="tr-dur">${dur}</div>
+      </div>`;
+    }).join('');
+  } catch {}
+}
+
+function fmtDurShort(inn,out){
+  const ms=new Date(out)-new Date(inn);
+  const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);
+  return h+'h'+(m>0?' '+m+'m':'');
+}
+
+function startClockFace(){
+  function tick(){
+    const now=new Date();
+    const el=document.getElementById('tcTime');
+    if (el) el.textContent=now.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+    const de=document.getElementById('tcDate');
+    if (de) de.textContent=now.toLocaleDateString('en-AU',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  }
+  tick();setInterval(tick,1000);
+}
+
+// ====== SCHEDULE ======
+async function loadSchedule(){
+  const today=new Date();
+  const weekStart=new Date(today);
+  const day=today.getDay();
+  weekStart.setDate(today.getDate()-(day===0?6:day-1)+(schedOffset*7));
+  document.getElementById('schedWeekLabel').textContent=
+    weekStart.toLocaleDateString('en-AU',{month:'short',day:'numeric'})+' – '+
+    new Date(weekStart.getTime()+6*864e5).toLocaleDateString('en-AU',{month:'short',day:'numeric',year:'numeric'});
+  const from=weekStart.toISOString().slice(0,10);
+  const to=new Date(weekStart.getTime()+6*864e5).toISOString().slice(0,10);
+  const shifts=await fetch(`/api/my/shifts?from=${from}`).then(r=>r.json()).catch(()=>[]);
+  myShifts=shifts.filter(s=>s.shift_date<=to);
+  renderWeekGrid(weekStart);
+  setTimeout(scrollToToday,100);
+}
+
+function schedNav(dir){schedOffset+=dir;loadSchedule()}
+function scrollToToday(){if(window.innerWidth>768)return;const todayStr=new Date().toISOString().slice(0,10);const grid=document.getElementById('schedGrid');const days=grid.querySelectorAll('.day-col');days.forEach(d=>{if(d.querySelector('.day-num.today')){d.scrollIntoView({behavior:'smooth',block:'nearest',inline:'start'})}})}
+
+function renderWeekGrid(weekStart){
+  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const todayStr=new Date().toISOString().slice(0,10);
+  const grid=document.getElementById('schedGrid');
+  grid.innerHTML=days.map((d,i)=>{
+    const date=new Date(weekStart.getTime()+i*864e5);
+    const ds=date.toISOString().slice(0,10);
+    const isToday=ds===todayStr;
+    const dayShifts=myShifts.filter(s=>s.shift_date===ds);
+    return `<div class="day-col">
+      <div class="day-head">
+        <div class="day-name">${d}</div>
+        <div class="day-num${isToday?' today':''}">${date.getDate()}</div>
+      </div>
+      <div class="day-shifts">
+        ${dayShifts.length?dayShifts.map(s=>`<div class="shift-block">
+          <div class="sb-time">${s.start_time} – ${s.end_time}</div>
+          <div class="sb-store">${s.store_name}</div>
+          ${s.role?`<div class="sb-role">${s.role}</div>`:''}
+        </div>`).join(''):'<div class="no-shifts">Off</div>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ====== FORMS ======
+async function loadForms(){
+  const fms=await fetch('/api/forms').then(r=>r.json()).catch(()=>[]);
+  activeForms=fms;
+  const body=document.getElementById('formsBody');
+  if (!fms.length){
+    body.innerHTML=`<div class="empty-state"><div class="ei">📋</div><h3>No forms available</h3><p>Check back later for forms to complete</p></div>`;
+    return;
+  }
+  body.innerHTML=`<div class="forms-grid">${fms.map(f=>`
+    <div class="form-card" onclick="openForm(${f.id})">
+      <div class="form-card-icon">📝</div>
+      <div class="form-card-title">${esc(f.title)}</div>
+      <div class="form-card-desc">${esc(f.description||'')}</div>
+      <div class="form-card-footer">Tap to fill out</div>
+    </div>`).join('')}</div>`;
+}
+
+async function openForm(id){
+  const f=await fetch('/api/forms/'+id).then(r=>r.json());
+  curFormId=id;
+  document.getElementById('formModalTitle').textContent=f.title;
+  document.getElementById('formModalDesc').textContent=f.description||'';
+  const container=document.getElementById('formModalFields');
+  container.innerHTML=f.fields.map(field=>`
+    <label class="fld-label">${esc(field.label)}${field.required?' *':''}</label>
+    ${renderFormField(field)}
+  `).join('');
+  document.getElementById('formModal').classList.add('show');
+}
+
+function renderFormField(f){
+  const id='ff_'+f.id;
+  if (f.type==='textarea') return `<textarea class="fld" id="${id}" rows="3" ${f.required?'required':''}></textarea>`;
+  if (f.type==='checkbox') return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="${id}" style="width:16px;height:16px;accent-color:var(--amb)"> ${esc(f.label)}</label>`;
+  if (f.type==='select') return `<select class="fld fld-select" id="${id}" ${f.required?'required':''}><option value="">— Select —</option>${(f.options||[]).map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('')}</select>`;
+  if (f.type==='radio') return `<div style="display:flex;flex-direction:column;gap:8px">${(f.options||[]).map((o,i)=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="radio" name="${id}" value="${esc(o)}" style="accent-color:var(--amb)"> ${esc(o)}</label>`).join('')}</div>`;
+  if (f.type==='number') return `<input type="number" class="fld" id="${id}" ${f.required?'required':''}>`;
+  if (f.type==='date') return `<input type="date" class="fld" id="${id}" ${f.required?'required':''}  style="color-scheme:dark">`;
+  return `<input type="text" class="fld" id="${id}" ${f.required?'required':''}>`;
+}
+
+async function submitForm(){
+  const f=activeForms.find(x=>x.id===curFormId);
+  if (!f) return;
+  const full=await fetch('/api/forms/'+curFormId).then(r=>r.json());
+  const data={};
+  for (const field of full.fields){
+    const id='ff_'+field.id;
+    if (field.type==='checkbox'){data[field.id]=document.getElementById(id)?.checked||false;}
+    else if (field.type==='radio'){const checked=document.querySelector(`input[name="${id}"]:checked`);data[field.id]=checked?checked.value:'';}
+    else {data[field.id]=document.getElementById(id)?.value||'';}
+    if (field.required&&!data[field.id]&&data[field.id]!==false){showToast(field.label+' is required','err');return}
+  }
+  const r=await fetch('/api/forms/'+curFormId+'/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data})});
+  if (r.ok){closeModal('formModal');showToast('Form submitted!','ok');}
+  else {const d=await r.json();showToast(d.error,'err');}
+}
+
+// ====== KNOWLEDGE BASE ======
+let myKBReads={};
+async function loadKB(){
+  [kbCats,kbAllArticles]=await Promise.all([
+    fetch('/api/kb/categories').then(r=>r.json()).catch(()=>[]),
+    fetch('/api/kb/articles').then(r=>r.json()).catch(()=>[]),
+    fetch('/api/kb/reads').then(r=>r.json()).then(reads=>{myKBReads={};reads.forEach(r=>{myKBReads[r.article_id]=r.read_at;});}).catch(()=>{}),
+  ]);
+  renderKBCats();
+  renderKBArticles();
+}
+
+function renderKBCats(){
+  const catList=document.getElementById('kbCatList');
+  catList.innerHTML=`<div class="kb-cat-item ${kbCurCat===''?'active':''}" data-cat="" onclick="kbSelectCat('',this)"><span class="kci">🗂️</span> All Articles</div>`;
+  catList.innerHTML+=kbCats.map(c=>`<div class="kb-cat-item ${kbCurCat==c.id?'active':''}" data-cat="${c.id}" onclick="kbSelectCat(${c.id},this)"><span class="kci">${c.icon||'📄'}</span> ${esc(c.name)}</div>`).join('');
+}
+
+function kbSelectCat(catId,el){
+  kbCurCat=catId;
+  document.querySelectorAll('.kb-cat-item').forEach(i=>i.classList.remove('active'));
+  el.classList.add('active');
+  renderKBArticles();
+}
+
+function kbFilter(val){kbSearchVal=val.toLowerCase();renderKBArticles()}
+
+function renderKBArticles(){
+  const articles=kbAllArticles.filter(a=>{
+    if (kbCurCat!==''&&a.category_id!=kbCurCat) return false;
+    if (kbSearchVal&&!a.title.toLowerCase().includes(kbSearchVal)) return false;
+    return true;
+  });
+  const main=document.getElementById('kbMain');
+  if (!articles.length){
+    main.innerHTML='<div class="empty-state" style="flex:1"><div class="ei">📭</div><h3>No articles found</h3></div>';return;
+  }
+  main.innerHTML=`<div class="kb-article-list">${articles.map(a=>{
+    const isRead=!!myKBReads[a.id];
+    return `<div class="kb-article-item" onclick="kbOpenArticle(${a.id})">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+        <h4>${esc(a.title)}</h4>
+        <span style="flex-shrink:0;font-size:11px;padding:2px 8px;border-radius:10px;margin-top:2px;${isRead?'background:rgba(16,185,129,.12);color:var(--grn);border:1px solid rgba(16,185,129,.25)':'background:rgba(0,140,237,.1);color:var(--amb);border:1px solid rgba(0,140,237,.2)'}">${isRead?'✓ Read':'Unread'}</span>
+      </div>
+      <div class="ka-meta">${a.category_icon||'📄'} ${a.category_name||'Uncategorised'} · ${fmtDate(a.updated_at?.slice(0,10)||a.created_at?.slice(0,10))}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+async function kbOpenArticle(id){
+  const a=await fetch('/api/kb/articles/'+id).then(r=>r.json());
+  // Mark as read
+  fetch('/api/kb/articles/'+id+'/read',{method:'POST'}).then(()=>{
+    myKBReads[id]=new Date().toISOString();
+  });
+  const main=document.getElementById('kbMain');
+  main.innerHTML=`<div class="kb-article-view">
+    <button class="kb-back-btn" onclick="renderKBArticles()">&#8592; Back to articles</button>
+    <div class="kb-article-content">
+      <h1>${esc(a.title)}</h1>
+      <div class="ka-meta">${a.category_icon||'📄'} ${a.category_name||'Uncategorised'} · Last updated ${fmtDate(a.updated_at?.slice(0,10))}</div>
+      <div class="kb-article-body">${esc(a.content)}</div>
+    </div>
+  </div>`;
+}
+
+// ====== CHAT ======
+async function loadChannels(){const r=await fetch('/api/channels');channels=await r.json();renderChannels()}
+async function loadUsers(){const r=await fetch('/api/users');users=await r.json();renderDMs()}
+async function loadUnread(){const r=await fetch('/api/unread');const d=await r.json();unread={};d.forEach(x=>{unread[x.sender_id]=x.count});renderDMs();updateChatBadge()}
+
+function updateChatBadge(){
+  const total=Object.values(unread).reduce((a,b)=>a+b,0);
+  const badge=document.getElementById('chatBadgeNav');
+  badge.style.display=total>0?'inline':'none';badge.textContent=total;
+}
+
+function renderChannels(){
+  document.getElementById('channelList').innerHTML=channels.map(ch=>`
+    <div class="nav-item ${active?.type==='channel'&&active.id==ch.id?'active':''}" onclick="openChannel(${ch.id},'${esc(ch.name)}')">
+      <span class="hash">#</span><span>${esc(ch.name)}</span>
+    </div>`).join('');
+}
+
+function renderDMs(){
+  const others=users.filter(u=>u.id!==me.id);
+  document.getElementById('dmList').innerHTML=others.map(u=>`
+    <div class="nav-item ${active?.type==='dm'&&active.id==u.id?'active':''}" onclick="openDM(${u.id},'${esc(u.name)}')">
+      <div class="av-sm" style="background:${u.avatar_color}">${initials(u.name)}${onlineIds.has(u.id)?'<div class="od"></div>':''}</div>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.name)}</span>
+      ${unread[u.id]?`<span class="badge">${unread[u.id]}</span>`:''}
+    </div>`).join('');
+}
+
+async function openChannel(id,name){
+  active={type:'channel',id,name};renderChannels();
+  document.getElementById('chatHead').innerHTML=`<span class="hash">#</span><span class="chat-title">${esc(name)}</span><span class="chat-desc">— ${esc(channels.find(c=>c.id===id)?.description||'')}</span>`;
+  document.getElementById('msgInput').placeholder=`Message #${name}`;
+  document.getElementById('msgInput').disabled=false;
+  socket.emit('join_channel',id);
+  const r=await fetch(`/api/channels/${id}/messages`);
+  renderMessages(await r.json());
+  if(window.innerWidth<=768) closeSidebar();
+}
+
+async function openDM(uid,name){
+  active={type:'dm',id:uid,name};delete unread[uid];renderDMs();updateChatBadge();
+  document.getElementById('chatHead').innerHTML=`<span>👤</span><span class="chat-title">${esc(name)}</span>`;
+  document.getElementById('msgInput').placeholder=`Message ${name}`;
+  document.getElementById('msgInput').disabled=false;
+  const r=await fetch(`/api/dm/${uid}`);
+  renderMessages(await r.json());
+  if(window.innerWidth<=768) closeSidebar();
+}
+
+function renderMessages(msgs){
+  const el=document.getElementById('messages');
+  if (!msgs.length){el.innerHTML=`<div class="empty-state"><div class="ei">👋</div><h3>Start the conversation!</h3></div>`;return}
+  let html='',lastSender=null,lastDate=null;
+  msgs.forEach(msg=>{
+    const d=new Date(msg.created_at);
+    const ds=d.toLocaleDateString('en-AU',{weekday:'long',month:'long',day:'numeric'});
+    if (ds!==lastDate){html+=`<div class="day-div">${ds}</div>`;lastDate=ds;lastSender=null}
+    lastSender=msg.sender_id;
+    const ts=d.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'});
+    const senderRole=users.find(u=>u.id===msg.sender_id)?.role;const isAdmin=senderRole==='admin'||senderRole==='manager';
+    html+=`<div class="msg-group"><div class="msg-head">
+      <div class="msg-av" style="background:${msg.avatar_color}">${initials(msg.name)}</div>
+      <div class="msg-body"><span class="msg-sender">${esc(msg.name)}${isAdmin?`<span class="admin-tag">${senderRole}</span>`:''}</span>
+      <span class="msg-time"> ${ts}</span>
+      <div class="msg-text first">${esc(msg.message)}</div></div></div></div>`;
+  });
+  el.innerHTML=html;el.scrollTop=el.scrollHeight;
+}
+
+function appendMessage(msg){
+  const el=document.getElementById('messages');
+  const es=el.querySelector('.empty-state');if(es)es.remove();
+  const d=new Date(msg.created_at);
+  const ts=d.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'});
+  const isAdmin=users.find(u=>u.id===msg.sender_id)?.role==='admin';
+  const g=document.createElement('div');g.className='msg-group';
+  g.innerHTML=`<div class="msg-head"><div class="msg-av" style="background:${msg.avatar_color}">${initials(msg.name)}</div>
+    <div class="msg-body"><span class="msg-sender">${esc(msg.name)}${isAdmin?`<span class="admin-tag">${senderRole}</span>`:''}</span>
+    <span class="msg-time"> ${ts}</span><div class="msg-text first">${esc(msg.message)}</div></div></div>`;
+  el.appendChild(g);el.scrollTop=el.scrollHeight;
+}
+
+function sendMessage(){
+  const input=document.getElementById('msgInput');const msg=input.value.trim();
+  if (!msg||!active)return;
+  if (active.type==='channel')socket.emit('channel_message',{channelId:active.id,message:msg});
+  else socket.emit('direct_message',{receiverId:active.id,message:msg});
+  input.value='';input.style.height='auto';
+}
+
+async function promptAddChannel(){
+  const name=prompt('Channel name:');if(!name)return;
+  const desc=prompt('Description (optional):')||'';
+  const r=await fetch('/api/channels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,description:desc})});
+  if(r.ok)await loadChannels();else{const d=await r.json();alert(d.error)}
+}
+
+function connectSocket(){
+  if (socket&&socket.connected) return;
+  socket=io();
+  socket.on('online_users',ids=>{onlineIds=new Set(ids);renderDMs()});
+  socket.on('channel_message',msg=>{if(active?.type==='channel'&&active.id==msg.channel_id)appendMessage(msg)});
+  socket.on('direct_message',msg=>{
+    const other=msg.sender_id===me.id?msg.receiver_id:msg.sender_id;
+    if(active?.type==='dm'&&active.id==other)appendMessage(msg);
+    else if(msg.sender_id!==me.id){unread[msg.sender_id]=(unread[msg.sender_id]||0)+1;renderDMs();updateChatBadge()}
+  });
+  socket.on('typing',({userId:uid,name,channelId,receiverId})=>{
+    if(active?.type==='channel'&&channelId==active.id&&uid!==me.id)showTyping(name+' is typing...');
+    if(active?.type==='dm'&&receiverId==me.id&&uid==active.id)showTyping(name+' is typing...');
+  });
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  const inp=document.getElementById('msgInput');
+  inp.addEventListener('input',()=>{inp.style.height='auto';inp.style.height=Math.min(inp.scrollHeight,120)+'px';
+    if(active&&socket)socket.emit('typing',active.type==='channel'?{channelId:active.id}:{receiverId:active.id})});
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
+});
+
+function showTyping(t){document.getElementById('typingInd').textContent=t;clearTimeout(typingTimer);typingTimer=setTimeout(()=>{document.getElementById('typingInd').textContent=''},2500)}
+async function logout(){await fetch('/api/logout',{method:'POST'});location.href='/'}
+function toggleSidebar(){document.querySelector('.sidebar').classList.toggle('open');document.getElementById('sbOverlay').classList.toggle('show')}
+function closeSidebar(){document.querySelector('.sidebar').classList.remove('open');document.getElementById('sbOverlay').classList.remove('show')}
+function initials(n){return n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}
+function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('show')}));
+let toastTimer;
+function showToast(msg,type='ok'){const t=document.getElementById('toast');t.textContent=(type==='ok'?'✓ ':'✕ ')+msg;t.className='toast '+type;t.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.style.display='none'},3500)}
+
+init();
+</script>
+</body>
+</html>
