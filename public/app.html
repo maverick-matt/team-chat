@@ -561,7 +561,8 @@ async function loadDashboard() {
     statusEl.innerHTML=`<span class="clock-status-badge clocked-in">● Clocked In</span>`;
     const tz=tcStatus.record.timezone||'Australia/Sydney';
     const tzAbbr=new Intl.DateTimeFormat('en-AU',{timeZone:tz,timeZoneName:'short'}).formatToParts(new Date()).find(p=>p.type==='timeZoneName')?.value||'';
-    storeEl.textContent='At '+tcStatus.record.store_name+' since '+fmtTimeInTz(tcStatus.record.clock_in_at,tz)+' '+tzAbbr;
+    const locBadge=locationBadge(tcStatus.record.clock_in_location_label,tcStatus.record.clock_in_location_url,tcStatus.record.clock_in_location_coords,tcStatus.record.clock_in_location_dist);
+    storeEl.innerHTML='At '+esc(tcStatus.record.store_name)+' since '+fmtTimeInTz(tcStatus.record.clock_in_at,tz)+' '+tzAbbr+' — '+locBadge;
   } else {
     statusEl.innerHTML=`<span class="clock-status-badge clocked-out">⏸ Not clocked in</span>`;
     storeEl.textContent='';
@@ -615,6 +616,11 @@ function fmtDate(ds){return new Date(ds+'T00:00:00').toLocaleDateString('en-AU',
 function fmtTime(dt){return new Date(dt).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'})}
 function fmtTimeInTz(dt,tz){return new Date(dt).toLocaleTimeString('en-AU',{timeZone:tz||'Australia/Sydney',hour:'2-digit',minute:'2-digit'})}
 function fmtDateInTz(dt,tz){return new Date(dt).toLocaleDateString('en-AU',{timeZone:tz||'Australia/Sydney',weekday:'short',month:'short',day:'numeric'})}
+function locationBadge(label,url,coords,dist){
+  if (label) return `<span style="color:var(--grn)">📍 ${esc(label)}</span>`;
+  if (url) return `<a href="${url}" target="_blank" rel="noopener" style="color:var(--amb);text-decoration:none">🗺 View on Maps <span style="font-size:10px;color:var(--mut)">(${dist}m from branch)</span></a>`;
+  return '<span style="color:var(--mut)">No GPS</span>';
+}
 function fmtDur(ms){const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);const s=Math.floor((ms%60000)/1000);return pad(h)+':'+pad(m)+':'+pad(s)}
 function pad(n){return String(n).padStart(2,'0')}
 
@@ -708,6 +714,8 @@ function getGPS(){
       const acc=Math.round(pos.coords.accuracy);
       dot.className='gps-dot ok';btn.disabled=false;
       msg.textContent=`Location found ±${acc}m${acc>300?' (refining…)':''}`;
+        // Auto-select nearest assigned store
+      autoSelectNearestStore(pos.coords.latitude,pos.coords.longitude);
       // Step 2: Silently refine with high-accuracy GPS if accuracy was poor
       if (acc>150){
         navigator.geolocation.getCurrentPosition(
@@ -715,9 +723,10 @@ function getGPS(){
             if (pos2.coords.accuracy<pos.coords.accuracy){
               gpsCoords={lat:pos2.coords.latitude,lng:pos2.coords.longitude};
               msg.textContent=`Location refined ±${Math.round(pos2.coords.accuracy)}m`;
+              autoSelectNearestStore(pos2.coords.latitude,pos2.coords.longitude);
             }
           },
-          ()=>{}, // ignore — we already have a usable fix
+          ()=>{},
           {enableHighAccuracy:true,timeout:10000,maximumAge:0}
         );
       }
@@ -730,6 +739,7 @@ function getGPS(){
           gpsCoords={lat:pos.coords.latitude,lng:pos.coords.longitude};
           dot.className='gps-dot ok';btn.disabled=false;
           msg.textContent=`Location found ±${Math.round(pos.coords.accuracy)}m`;
+          autoSelectNearestStore(pos.coords.latitude,pos.coords.longitude);
         },
         err2=>gpsError(gpsErrMsg(err2)),
         {enableHighAccuracy:true,timeout:8000,maximumAge:30000}
@@ -737,6 +747,31 @@ function getGPS(){
     },
     {enableHighAccuracy:false,timeout:5000,maximumAge:60000}
   );
+}
+
+function autoSelectNearestStore(lat,lng){
+  const sel=document.getElementById('tcStoreId');
+  if (!sel||!sel.options.length) return;
+  const storeList=me.role==='admin'?allAdminStores:myStores;
+  if (!storeList.length) return;
+  // Find closest store to GPS coords using Haversine
+  let nearest=null, nearestDist=Infinity;
+  storeList.forEach(s=>{
+    if (s.lat==null||s.lng==null) return;
+    const R=6371000,φ1=lat*Math.PI/180,φ2=s.lat*Math.PI/180;
+    const Δφ=(s.lat-lat)*Math.PI/180,Δλ=(s.lng-lng)*Math.PI/180;
+    const a=Math.sin(Δφ/2)**2+Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+    const d=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+    if (d<nearestDist){nearestDist=d;nearest=s;}
+  });
+  if (nearest&&sel.value!=nearest.id){
+    sel.value=nearest.id;
+    setClockTimezone(nearest.timezone||'Australia/Sydney');
+    // Show distance hint
+    const msg=document.getElementById('gpsMsg');
+    const distTxt=nearestDist<1000?Math.round(nearestDist)+'m':((nearestDist/1000).toFixed(1)+'km');
+    if(msg) msg.textContent=`${msg.textContent.split('—')[0].trim()} — ${nearest.name} selected (${distTxt} away)`;
+  }
 }
 
 function gpsError(message){
@@ -796,11 +831,17 @@ async function loadTCRecords(){
       const isActive=!r.clock_out_at;
       const dur=isActive?'<span class="tr-active">● Active</span>':fmtDurShort(r.clock_in_at,r.clock_out_at);
       const tzAbbr=new Intl.DateTimeFormat('en-AU',{timeZone:tz,timeZoneName:'short'}).formatToParts(new Date()).find(p=>p.type==='timeZoneName')?.value||'';
+      const inLocHtml = locationBadge(r.clock_in_location_label, r.clock_in_location_url, r.clock_in_location_coords, r.clock_in_location_dist);
+      const outLocHtml = r.clock_out_at ? locationBadge(r.clock_out_location_label, r.clock_out_location_url, r.clock_out_location_coords, r.clock_out_location_dist) : '';
       return `<div class="tr-row" style="flex-wrap:wrap;gap:4px">
         <div class="tr-store">${r.store_name}</div>
         <div class="tr-date">${fmtDateInTz(r.clock_in_at,tz)}</div>
         <div style="font-size:12px;color:var(--mut)">${fmtTimeInTz(r.clock_in_at,tz)}${r.clock_out_at?' – '+fmtTimeInTz(r.clock_out_at,tz):''} <span style="font-size:10px">${tzAbbr}</span></div>
         <div class="tr-dur">${dur}</div>
+        <div style="width:100%;display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">
+          <span style="font-size:11px;color:var(--mut)">In: ${inLocHtml}</span>
+          ${r.clock_out_at?`<span style="font-size:11px;color:var(--mut)">Out: ${outLocHtml}</span>`:''}
+        </div>
         ${!isActive&&r.clock_out_at?`<button class="btn btn-ghost" style="padding:3px 8px;font-size:11px;margin-left:auto" onclick="openTSEdit(${r.id},'${r.clock_in_at}','${r.clock_out_at}')">Request correction</button>`:''}
       </div>`;
     }).join('');

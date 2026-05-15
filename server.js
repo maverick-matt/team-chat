@@ -239,6 +239,41 @@ function haversineDist(lat1,lng1,lat2,lng2) {
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
+// Enrich a clock record with human-readable location info
+function enrichLocation(rec) {
+  if (!rec) return rec;
+  const inLat=rec.clock_in_lat, inLng=rec.clock_in_lng;
+  const outLat=rec.clock_out_lat, outLng=rec.clock_out_lng;
+  const store=db.prepare('SELECT name,lat,lng FROM stores WHERE id=?').get(rec.store_id);
+  // Clock-in location
+  if (inLat!=null&&inLng!=null&&store) {
+    const dist=Math.round(haversineDist(inLat,inLng,store.lat,store.lng));
+    rec.clock_in_location_label = dist<=200 ? store.name : null;
+    rec.clock_in_location_dist  = dist;
+    rec.clock_in_location_url   = dist>200 ? `https://www.google.com/maps?q=${inLat.toFixed(6)},${inLng.toFixed(6)}` : null;
+    rec.clock_in_location_coords= dist>200 ? `${inLat.toFixed(5)},${inLng.toFixed(5)}` : null;
+  } else {
+    rec.clock_in_location_label=null;
+    rec.clock_in_location_url=null;
+    rec.clock_in_location_coords=null;
+    rec.clock_in_location_dist=null;
+  }
+  // Clock-out location
+  if (outLat!=null&&outLng!=null&&store) {
+    const dist=Math.round(haversineDist(outLat,outLng,store.lat,store.lng));
+    rec.clock_out_location_label = dist<=200 ? store.name : null;
+    rec.clock_out_location_dist  = dist;
+    rec.clock_out_location_url   = dist>200 ? `https://www.google.com/maps?q=${outLat.toFixed(6)},${outLng.toFixed(6)}` : null;
+    rec.clock_out_location_coords= dist>200 ? `${outLat.toFixed(5)},${outLng.toFixed(5)}` : null;
+  } else {
+    rec.clock_out_location_label=null;
+    rec.clock_out_location_url=null;
+    rec.clock_out_location_coords=null;
+    rec.clock_out_location_dist=null;
+  }
+  return rec;
+}
+
 // ---- AUTH ----
 app.post('/api/login',(req,res)=>{
   const {username,password}=req.body;
@@ -313,7 +348,7 @@ app.delete('/api/stores/:id',auth,adminOnly,(req,res)=>{
 // ---- CLOCK ----
 app.get('/api/clock/status',auth,(req,res)=>{
   const rec=db.prepare('SELECT cr.*,s.name as store_name,s.timezone FROM clock_records cr JOIN stores s ON s.id=cr.store_id WHERE cr.user_id=? AND cr.clock_out_at IS NULL ORDER BY cr.clock_in_at DESC LIMIT 1').get(req.user.id);
-  res.json({clocked_in:!!rec,record:rec||null});
+  res.json({clocked_in:!!rec,record:rec?enrichLocation(rec):null});
 });
 app.post('/api/clock/in',auth,(req,res)=>{
   const {lat,lng,store_id}=req.body;
@@ -341,10 +376,12 @@ app.post('/api/clock/out',auth,(req,res)=>{
 });
 app.get('/api/clock/records',auth,(req,res)=>{
   const uid=req.query.user_id&&req.user.role==='admin'?parseInt(req.query.user_id):req.user.id;
-  res.json(db.prepare('SELECT cr.*,s.name as store_name,s.timezone,u.name as user_name FROM clock_records cr JOIN stores s ON s.id=cr.store_id JOIN users u ON u.id=cr.user_id WHERE cr.user_id=? ORDER BY cr.clock_in_at DESC LIMIT 50').all(uid));
+  const recs=db.prepare('SELECT cr.*,s.name as store_name,s.timezone,u.name as user_name FROM clock_records cr JOIN stores s ON s.id=cr.store_id JOIN users u ON u.id=cr.user_id WHERE cr.user_id=? ORDER BY cr.clock_in_at DESC LIMIT 50').all(uid);
+  res.json(recs.map(enrichLocation));
 });
 app.get('/api/clock/all',auth,adminOnly,(req,res)=>{
-  res.json(db.prepare('SELECT cr.*,s.name as store_name,s.timezone,u.name as user_name,u.avatar_color FROM clock_records cr JOIN stores s ON s.id=cr.store_id JOIN users u ON u.id=cr.user_id ORDER BY cr.clock_in_at DESC LIMIT 300').all());
+  const recs=db.prepare('SELECT cr.*,s.name as store_name,s.timezone,u.name as user_name,u.avatar_color FROM clock_records cr JOIN stores s ON s.id=cr.store_id JOIN users u ON u.id=cr.user_id ORDER BY cr.clock_in_at DESC LIMIT 300').all();
+  res.json(recs.map(enrichLocation));
 });
 app.put('/api/clock/records/:id',auth,adminOnly,(req,res)=>{
   const {clock_in_at,clock_out_at,notes}=req.body;
@@ -504,7 +541,15 @@ app.get('/api/reports/timesheet',auth,(req,res)=>{
   if (store_id){q+=' AND rs.store_id=?';args.push(store_id);}
   if (user_id){q+=' AND rs.user_id=?';args.push(user_id);}
   q+=' ORDER BY rs.shift_date,u.name';
-  res.json(db.prepare(q).all(...args));
+  const reportRows=db.prepare(q).all(...args);
+  // Enrich location data for each row that has a clock record
+  reportRows.forEach(r=>{
+    if (r.clock_record_id&&r.clock_in_at) {
+      const cr=db.prepare('SELECT * FROM clock_records WHERE id=?').get(r.clock_record_id);
+      if (cr) { const enriched=enrichLocation(cr); Object.assign(r,{clock_in_location_label:enriched.clock_in_location_label,clock_in_location_url:enriched.clock_in_location_url,clock_in_location_coords:enriched.clock_in_location_coords,clock_in_location_dist:enriched.clock_in_location_dist}); }
+    } else { r.clock_in_location_label=null;r.clock_in_location_url=null;r.clock_in_location_coords=null;r.clock_in_location_dist=null; }
+  });
+  res.json(reportRows);
 });
 
 // Printable HTML timesheet report
@@ -546,6 +591,16 @@ app.get('/api/reports/timesheet/print',auth,(req,res)=>{
     if(!r.clock_in_at&&r.shift_date<new Date().toISOString().slice(0,10))discrepancy='No clock record';
     grouped[key].rows.push({...r,discrepancy});
   });
+  // Enrich location data for the report rows
+  rows.forEach(r=>{
+    if(r.clock_in_at&&r.clock_in_lat!=null){
+      const store=db.prepare('SELECT lat,lng FROM stores WHERE id=?').get(r.store_id||0);
+      if(store){
+        const d=Math.round(haversineDist(r.clock_in_lat,r.clock_in_lng,store.lat,store.lng));
+        r._inLoc=d<=200?r.store_name:`<a href="https://www.google.com/maps?q=${r.clock_in_lat},${r.clock_in_lng}" style="color:#2B5EA7">Maps (${d}m away)</a>`;
+      }
+    } else { r._inLoc='No GPS'; }
+  });
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Timesheet Report ${from} to ${to}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:12px;color:#0D1E35;padding:24px}
@@ -565,13 +620,14 @@ tr:nth-child(even) td{background:#fafbfd}
 <div class="meta">Generated ${new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · Maverick Campers & Caravans</div>
 ${Object.values(grouped).map(g=>`
 <div class="store-head">📍 ${g.store} (${g.tz||'AU'})</div>
-<table><thead><tr><th>Date</th><th>Staff Member</th><th>Position</th><th>Rostered</th><th>Clocked In</th><th>Clocked Out</th><th>Duration</th><th>Discrepancy</th></tr></thead>
+<table><thead><tr><th>Date</th><th>Staff Member</th><th>Position</th><th>Rostered</th><th>Clocked In</th><th>Clock-in Location</th><th>Clocked Out</th><th>Duration</th><th>Discrepancy</th></tr></thead>
 <tbody>${g.rows.map(r=>`<tr>
 <td>${new Date(r.shift_date+'T00:00:00').toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'})}</td>
 <td>${r.user_name}</td>
 <td>${r.position_name||r.role||'—'}</td>
 <td>${r.start_time}–${r.end_time}</td>
 <td>${r.clock_in_at?fmtTZ(r.clock_in_at,r.timezone):'<span class="no-record">—</span>'}</td>
+<td>${r._inLoc||'—'}</td>
 <td>${r.clock_out_at?fmtTZ(r.clock_out_at,r.timezone):'<span class="no-record">—</span>'}</td>
 <td>${durStr(r.clock_in_at,r.clock_out_at,r.timezone)}</td>
 <td>${r.discrepancy?`<span class="disc">${r.discrepancy}</span>`:'<span class="ok">✓ On time</span>'}</td>
