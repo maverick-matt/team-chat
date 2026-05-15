@@ -47,6 +47,31 @@ db.exec(`
     read INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+  CREATE TABLE IF NOT EXISTS group_chats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    created_by INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS group_members (
+    group_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (group_id, user_id)
+  );
+  CREATE TABLE IF NOT EXISTS group_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id INTEGER NOT NULL,
+    sender_id INTEGER NOT NULL,
+    message TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS group_message_reads (
+    group_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    last_read_id INTEGER DEFAULT 0,
+    PRIMARY KEY (group_id, user_id)
+  );
   CREATE TABLE IF NOT EXISTS stores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -770,6 +795,98 @@ app.get('/api/kb/articles/:id/reads',auth,managerOrAdmin,(req,res)=>{
   res.json(db.prepare('SELECT r.*,u.name,u.avatar_color FROM kb_article_reads r JOIN users u ON u.id=r.user_id WHERE r.article_id=? ORDER BY r.read_at DESC').all(req.params.id));
 });
 
+// ---- GROUP CHATS ----
+app.get('/api/groups',auth,(req,res)=>{
+  const groups=db.prepare(`
+    SELECT gc.id,gc.name,gc.created_by,gc.created_at,
+      (SELECT COUNT(*) FROM group_members WHERE group_id=gc.id) as member_count,
+      (SELECT COUNT(*) FROM group_messages gm WHERE gm.group_id=gc.id
+        AND gm.id>(SELECT COALESCE(last_read_id,0) FROM group_message_reads WHERE group_id=gc.id AND user_id=?)) as unread
+    FROM group_chats gc
+    JOIN group_members gm ON gm.group_id=gc.id AND gm.user_id=?
+    ORDER BY gc.created_at DESC
+  `).all(req.user.id,req.user.id);
+  res.json(groups);
+});
+
+app.post('/api/groups',auth,(req,res)=>{
+  let {name,member_ids}=req.body;
+  if(!Array.isArray(member_ids)||!member_ids.length) return res.status(400).json({error:'Add at least one member'});
+  // Auto-name if blank
+  if(!name||!name.trim()){
+    const names=db.prepare(`SELECT name FROM users WHERE id IN (${member_ids.map(()=>'?').join(',')}) ORDER BY name LIMIT 3`).all(...member_ids).map(u=>u.name.split(' ')[0]);
+    name='Group: '+names.join(', ')+(member_ids.length>3?'…':'');
+  }
+  const r=db.prepare('INSERT INTO group_chats (name,created_by) VALUES (?,?)').run(name.trim(),req.user.id);
+  const gid=r.lastInsertRowid;
+  // Add creator + all specified members
+  const allMembers=[...new Set([req.user.id,...member_ids.map(Number)])];
+  allMembers.forEach(uid=>db.prepare('INSERT OR IGNORE INTO group_members (group_id,user_id) VALUES (?,?)').run(gid,uid));
+  res.json({id:gid,name:name.trim(),member_count:allMembers.length});
+});
+
+app.get('/api/groups/:id',auth,(req,res)=>{
+  const gid=req.params.id;
+  const member=db.prepare('SELECT 1 FROM group_members WHERE group_id=? AND user_id=?').get(gid,req.user.id);
+  if(!member) return res.status(403).json({error:'Not a member'});
+  const group=db.prepare('SELECT * FROM group_chats WHERE id=?').get(gid);
+  const members=db.prepare('SELECT u.id,u.name,u.avatar_color,u.role FROM group_members gm JOIN users u ON u.id=gm.user_id WHERE gm.group_id=?').all(gid);
+  res.json({...group,members});
+});
+
+app.post('/api/groups/:id/members',auth,(req,res)=>{
+  const {user_ids}=req.body;
+  const group=db.prepare('SELECT * FROM group_chats WHERE id=?').get(req.params.id);
+  if(!group) return res.status(404).json({error:'Group not found'});
+  const isMember=db.prepare('SELECT 1 FROM group_members WHERE group_id=? AND user_id=?').get(req.params.id,req.user.id);
+  if(!isMember) return res.status(403).json({error:'Not a member'});
+  if(group.created_by!==req.user.id&&req.user.role!=='admin') return res.status(403).json({error:'Only the group creator or admin can add members'});
+  (user_ids||[]).forEach(uid=>db.prepare('INSERT OR IGNORE INTO group_members (group_id,user_id) VALUES (?,?)').run(req.params.id,Number(uid)));
+  res.json({ok:true});
+});
+
+app.delete('/api/groups/:id/members/:uid',auth,(req,res)=>{
+  const group=db.prepare('SELECT * FROM group_chats WHERE id=?').get(req.params.id);
+  if(!group) return res.status(404).json({error:'Not found'});
+  const targetUid=parseInt(req.params.uid);
+  // Can remove yourself (leave), or creator/admin can remove others
+  const canRemove=targetUid===req.user.id||group.created_by===req.user.id||req.user.role==='admin';
+  if(!canRemove) return res.status(403).json({error:'Not allowed'});
+  db.prepare('DELETE FROM group_members WHERE group_id=? AND user_id=?').run(req.params.id,targetUid);
+  res.json({ok:true});
+});
+
+app.put('/api/groups/:id',auth,(req,res)=>{
+  const {name}=req.body;
+  const group=db.prepare('SELECT * FROM group_chats WHERE id=?').get(req.params.id);
+  if(!group) return res.status(404).json({error:'Not found'});
+  if(group.created_by!==req.user.id&&req.user.role!=='admin') return res.status(403).json({error:'Only creator or admin can rename'});
+  db.prepare('UPDATE group_chats SET name=? WHERE id=?').run(name.trim(),req.params.id);
+  res.json({ok:true});
+});
+
+app.delete('/api/groups/:id',auth,(req,res)=>{
+  const group=db.prepare('SELECT * FROM group_chats WHERE id=?').get(req.params.id);
+  if(!group) return res.status(404).json({error:'Not found'});
+  if(group.created_by!==req.user.id&&req.user.role!=='admin') return res.status(403).json({error:'Only creator or admin can delete'});
+  db.prepare('DELETE FROM group_messages WHERE group_id=?').run(req.params.id);
+  db.prepare('DELETE FROM group_members WHERE group_id=?').run(req.params.id);
+  db.prepare('DELETE FROM group_message_reads WHERE group_id=?').run(req.params.id);
+  db.prepare('DELETE FROM group_chats WHERE id=?').run(req.params.id);
+  res.json({ok:true});
+});
+
+app.get('/api/groups/:id/messages',auth,(req,res)=>{
+  const member=db.prepare('SELECT 1 FROM group_members WHERE group_id=? AND user_id=?').get(req.params.id,req.user.id);
+  if(!member) return res.status(403).json({error:'Not a member'});
+  const msgs=db.prepare(`SELECT gm.id,gm.group_id,gm.message,gm.created_at,u.id as sender_id,u.name,u.username,u.avatar_color,u.role
+    FROM group_messages gm JOIN users u ON u.id=gm.sender_id WHERE gm.group_id=? ORDER BY gm.created_at DESC LIMIT 100`).all(req.params.id);
+  // Mark as read
+  const lastId=msgs.length?msgs[0].id:0;
+  db.prepare('INSERT OR REPLACE INTO group_message_reads (group_id,user_id,last_read_id) VALUES (?,?,?)').run(req.params.id,req.user.id,lastId);
+  res.json(msgs.reverse());
+});
+
 // ---- CHANNELS ----
 app.get('/api/channels',auth,(req,res)=>{
   res.json(db.prepare('SELECT * FROM channels ORDER BY name').all());
@@ -821,6 +938,19 @@ io.on('connection',(socket)=>{
   io.emit('online_users',Array.from(onlineUsers.keys()));
   socket.on('join_channel',(id)=>socket.join('ch_'+id));
   socket.on('leave_channel',(id)=>socket.leave('ch_'+id));
+  socket.on('join_group',(id)=>socket.join('grp_'+id));
+  socket.on('leave_group',(id)=>socket.leave('grp_'+id));
+  socket.on('group_message',({groupId,message})=>{
+    if(!message?.trim()) return;
+    const member=db.prepare('SELECT 1 FROM group_members WHERE group_id=? AND user_id=?').get(groupId,socket.user.id);
+    if(!member) return;
+    const r=db.prepare('INSERT INTO group_messages (group_id,sender_id,message) VALUES (?,?,?)').run(groupId,socket.user.id,message.trim());
+    const u=db.prepare('SELECT name,username,avatar_color,role FROM users WHERE id=?').get(socket.user.id);
+    const msg={id:r.lastInsertRowid,group_id:groupId,sender_id:socket.user.id,message:message.trim(),name:u.name,username:u.username,avatar_color:u.avatar_color,role:u.role,created_at:new Date().toISOString()};
+    io.to('grp_'+groupId).emit('group_message',msg);
+    const members=db.prepare('SELECT user_id FROM group_members WHERE group_id=? AND user_id!=?').all(groupId,socket.user.id);
+    members.forEach(m=>{const sid=onlineUsers.get(m.user_id);if(sid)io.to(sid).emit('group_notification',{groupId,fromName:u.name,groupName:db.prepare('SELECT name FROM group_chats WHERE id=?').get(groupId)?.name});});
+  });
   socket.on('channel_message',({channelId,message})=>{
     if (!message?.trim()) return;
     const r=db.prepare('INSERT INTO channel_messages (channel_id,sender_id,message) VALUES (?,?,?)').run(channelId,socket.user.id,message.trim());

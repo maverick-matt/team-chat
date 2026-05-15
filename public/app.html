@@ -228,6 +228,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--txt);disp
 .oc-role{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);padding:2px 6px;border-radius:8px;display:inline-block;background:rgba(122,150,184,.12)}
 @media(max-width:768px){.oc-card{width:128px}.oc-level{gap:12px}.oc-av{width:36px;height:36px;font-size:13px}}
 
+/* GROUP CHAT HEADER MEMBERS */
+.grp-avatars{display:flex;align-items:center;gap:-4px}
+.grp-av-sm{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;border:2px solid var(--sur);margin-left:-6px;flex-shrink:0}
+.grp-av-sm:first-child{margin-left:0}
+.grp-manage-btn{background:none;border:1px solid var(--brd);color:var(--mut);border-radius:6px;font-size:11px;padding:3px 8px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.grp-manage-btn:hover{color:var(--txt);border-color:var(--amb)}
+/* Member pick list in modal */
+.member-pick{display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto;margin-top:4px}
+.member-pick-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;border:1px solid var(--brd);transition:border-color .15s,background .15s;background:var(--sur)}
+.member-pick-item:hover{border-color:var(--amb)}
+.member-pick-item.selected{border-color:var(--amb);background:rgba(43,94,167,.06)}
+.member-pick-item .chk{width:16px;height:16px;border-radius:4px;border:2px solid var(--brd);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.member-pick-item.selected .chk{background:var(--amb);border-color:var(--amb);color:#fff}
+
 /* MOBILE TOP BAR */
 .mob-bar{display:none;align-items:center;gap:12px;height:52px;padding:0 16px;background:#1C3B6E;border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0;z-index:10}
 .mob-menu-btn{background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;line-height:1;cursor:pointer;padding:4px;display:flex;align-items:center;flex-shrink:0}
@@ -354,6 +368,8 @@ textarea.fld{resize:vertical;min-height:80px;line-height:1.5}
     <div id="sbChat" style="display:none">
       <div class="sec-label">Channels<button id="addChBtn" style="display:none" onclick="promptAddChannel()">＋</button></div>
       <div id="channelList"></div>
+      <div class="sec-label">Group Messages<button onclick="openNewGroup()" title="New Group">＋</button></div>
+      <div id="groupList"></div>
       <div class="sec-label">Direct Messages</div>
       <div id="dmList"></div>
     </div>
@@ -493,6 +509,46 @@ textarea.fld{resize:vertical;min-height:80px;line-height:1.5}
 
 </div>
 
+<!-- NEW GROUP MODAL -->
+<div class="overlay" id="newGroupModal">
+  <div class="modal" style="width:500px">
+    <h2>New Group Chat</h2>
+    <span class="fld-label">Group Name (optional)</span>
+    <input type="text" class="fld" id="ngName" placeholder="e.g. Sales Team SA — will auto-generate if left blank"/>
+    <span class="fld-label">Add Members *</span>
+    <input type="text" class="fld" id="ngSearch" placeholder="Search team members…" oninput="filterMemberPick(this.value)" style="margin-bottom:8px"/>
+    <div class="member-pick" id="ngMemberList"></div>
+    <div id="ngSelectedCount" style="font-size:12px;color:var(--mut);margin-top:8px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('newGroupModal')">Cancel</button>
+      <button class="btn btn-amb" onclick="createGroup()">Create Group</button>
+    </div>
+  </div>
+</div>
+
+<!-- MANAGE GROUP MODAL -->
+<div class="overlay" id="manageGroupModal">
+  <div class="modal" style="width:500px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <h2 style="margin:0" id="mgTitle">Group Members</h2>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost" id="mgRenameBtn" onclick="renameGroupPrompt()" style="font-size:11px;padding:5px 10px">✏ Rename</button>
+        <button class="btn btn-danger" id="mgDeleteBtn" onclick="deleteGroupFromModal()" style="font-size:11px;padding:5px 10px">🗑 Delete</button>
+      </div>
+    </div>
+    <div id="mgMemberList" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;margin-bottom:16px"></div>
+    <div id="mgAddSection">
+      <span class="fld-label">Add More Members</span>
+      <div class="member-pick" id="mgAddList" style="max-height:160px"></div>
+      <button class="btn btn-amb" onclick="addMembersToGroup()" style="margin-top:10px;width:100%">Add Selected</button>
+    </div>
+    <div class="modal-actions" style="justify-content:space-between">
+      <button class="btn btn-danger" onclick="leaveGroup()" style="font-size:12px">Leave Group</button>
+      <button class="btn btn-ghost" onclick="closeModal('manageGroupModal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- TIMESHEET EDIT REQUEST MODAL -->
 <div class="overlay" id="tsEditModal">
   <div class="modal">
@@ -574,7 +630,7 @@ function switchModule(name) {
   else if (name==='forms') loadForms();
   else if (name==='kb') loadKB();
   else if (name==='orgchart') loadAppOrgChart();
-  else if (name==='chat') {loadChannels();loadUsers();loadUnread();connectSocket();}
+  else if (name==='chat') {loadChannels();loadUsers();loadUnread();loadGroups();connectSocket();}
 }
 
 // ====== DASHBOARD ======
@@ -1121,13 +1177,186 @@ function buildAppOCNode(node){
   return wrap;
 }
 
+// ====== GROUP CHAT ======
+let myGroups=[], groupUnread={}, curGroupId=null;
+
+async function loadGroups(){
+  myGroups=await fetch('/api/groups').then(r=>r.json()).catch(()=>[]);
+  groupUnread={};
+  myGroups.forEach(g=>{if(g.unread>0)groupUnread[g.id]=g.unread;});
+  renderGroups();
+  updateChatBadge();
+}
+
+function renderGroups(){
+  const el=document.getElementById('groupList');
+  if(!myGroups.length){el.innerHTML='<div style="padding:4px 14px;font-size:12px;color:rgba(255,255,255,.35)">No groups yet</div>';return}
+  el.innerHTML=myGroups.map(g=>`
+    <div class="nav-item ${active?.type==='group'&&active.id==g.id?'active':''}" onclick="openGroup(${g.id},'${esc(g.name)}')">
+      <span style="font-size:14px;flex-shrink:0">👥</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.name)}</span>
+      ${groupUnread[g.id]?`<span class="badge">${groupUnread[g.id]}</span>`:''}
+    </div>`).join('');
+}
+
+async function openGroup(id,name){
+  active={type:'group',id,name};
+  delete groupUnread[id];
+  renderGroups();updateChatBadge();
+  // Header
+  const gData=await fetch('/api/groups/'+id).then(r=>r.json());
+  const memberAvatars=gData.members.slice(0,5).map(m=>`<div class="grp-av-sm" style="background:${m.avatar_color}" title="${esc(m.name)}">${initials(m.name)}</div>`).join('');
+  document.getElementById('chatHead').innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+      <span>👥</span>
+      <span class="chat-title">${esc(name)}</span>
+      <div class="grp-avatars" style="margin-left:4px">${memberAvatars}</div>
+      <span style="font-size:12px;color:var(--mut)">${gData.members.length} members</span>
+    </div>
+    <button class="grp-manage-btn" onclick="openManageGroup(${id})">Manage ▾</button>`;
+  document.getElementById('msgInput').placeholder=`Message ${name}`;
+  document.getElementById('msgInput').disabled=false;
+  socket.emit('join_group',id);
+  const msgs=await fetch('/api/groups/'+id+'/messages').then(r=>r.json());
+  renderMessages(msgs);
+  if(window.innerWidth<=768) closeSidebar();
+}
+
+// ---- Create Group ----
+function openNewGroup(){
+  document.getElementById('ngName').value='';
+  document.getElementById('ngSearch').value='';
+  document.getElementById('ngSelectedCount').textContent='';
+  const list=document.getElementById('ngMemberList');
+  list.innerHTML=users.filter(u=>u.id!==me.id).map(u=>`
+    <div class="member-pick-item" data-uid="${u.id}" onclick="toggleMemberPick(this)">
+      <div class="chk">✓</div>
+      <div class="av-sm" style="background:${u.avatar_color}">${initials(u.name)}</div>
+      <span style="font-size:13px;flex:1">${esc(u.name)}</span>
+      <span style="font-size:11px;color:var(--mut)">${u.role==='admin'?'Admin':u.role==='manager'?'Manager':'Member'}</span>
+    </div>`).join('');
+  document.getElementById('newGroupModal').classList.add('show');
+}
+
+function toggleMemberPick(el){
+  el.classList.toggle('selected');
+  const count=document.querySelectorAll('#ngMemberList .member-pick-item.selected').length;
+  document.getElementById('ngSelectedCount').textContent=count>0?count+' member'+(count!==1?'s':'')+' selected':'';
+}
+
+function filterMemberPick(val){
+  const v=val.toLowerCase();
+  document.querySelectorAll('#ngMemberList .member-pick-item').forEach(el=>{
+    el.style.display=el.textContent.toLowerCase().includes(v)?'flex':'none';
+  });
+}
+
+async function createGroup(){
+  const name=document.getElementById('ngName').value.trim();
+  const ids=Array.from(document.querySelectorAll('#ngMemberList .member-pick-item.selected')).map(el=>parseInt(el.dataset.uid));
+  if(!ids.length){showToast('Select at least one member','err');return}
+  const r=await fetch('/api/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,member_ids:ids})});
+  const d=await r.json();
+  if(!r.ok){showToast(d.error,'err');return}
+  closeModal('newGroupModal');
+  await loadGroups();
+  openGroup(d.id,d.name);
+  showToast('Group "'+d.name+'" created','ok');
+}
+
+// ---- Manage Group ----
+async function openManageGroup(id){
+  curGroupId=id;
+  const g=await fetch('/api/groups/'+id).then(r=>r.json());
+  document.getElementById('mgTitle').textContent=g.name;
+  const isCreator=g.created_by===me.id||me.role==='admin';
+  document.getElementById('mgDeleteBtn').style.display=isCreator?'':'none';
+  document.getElementById('mgRenameBtn').style.display=isCreator?'':'none';
+  // Current members
+  const memberIds=new Set(g.members.map(m=>m.id));
+  document.getElementById('mgMemberList').innerHTML=g.members.map(m=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:var(--bg)">
+      <div class="av-sm" style="background:${m.avatar_color}">${initials(m.name)}</div>
+      <span style="flex:1;font-size:13px">${esc(m.name)}</span>
+      <span style="font-size:11px;color:var(--mut)">${m.role==='admin'?'Admin':m.role==='manager'?'Manager':'Member'}</span>
+      ${(isCreator&&m.id!==me.id)?`<button onclick="removeMember(${m.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px 4px" title="Remove">✕</button>`:''}
+    </div>`).join('');
+  // Add members list (non-members only)
+  const addList=document.getElementById('mgAddList');
+  const nonMembers=users.filter(u=>!memberIds.has(u.id)&&u.id!==me.id);
+  if(!nonMembers.length){
+    addList.innerHTML='<div style="font-size:12px;color:var(--mut)">All team members are already in this group.</div>';
+    document.querySelector('#mgAddSection button').style.display='none';
+  } else {
+    document.querySelector('#mgAddSection button').style.display='block';
+    addList.innerHTML=nonMembers.map(u=>`
+      <div class="member-pick-item" data-uid="${u.id}" onclick="toggleMemberPick(this)">
+        <div class="chk">✓</div>
+        <div class="av-sm" style="background:${u.avatar_color}">${initials(u.name)}</div>
+        <span style="font-size:13px;flex:1">${esc(u.name)}</span>
+      </div>`).join('');
+  }
+  document.getElementById('manageGroupModal').classList.add('show');
+}
+
+async function removeMember(uid){
+  if(!confirm('Remove this member from the group?')) return;
+  const r=await fetch('/api/groups/'+curGroupId+'/members/'+uid,{method:'DELETE'});
+  if(r.ok){showToast('Member removed','ok');await openManageGroup(curGroupId);}
+  else{const d=await r.json();showToast(d.error,'err');}
+}
+
+async function addMembersToGroup(){
+  const ids=Array.from(document.querySelectorAll('#mgAddList .member-pick-item.selected')).map(el=>parseInt(el.dataset.uid));
+  if(!ids.length){showToast('Select members to add','err');return}
+  const r=await fetch('/api/groups/'+curGroupId+'/members',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:ids})});
+  if(r.ok){showToast(ids.length+' member'+(ids.length!==1?'s':'')+' added','ok');await openManageGroup(curGroupId);await loadGroups();}
+  else{const d=await r.json();showToast(d.error,'err');}
+}
+
+async function renameGroupPrompt(){
+  const g=myGroups.find(x=>x.id===curGroupId);
+  const newName=prompt('New group name:',g?.name||'');
+  if(!newName||!newName.trim()) return;
+  const r=await fetch('/api/groups/'+curGroupId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:newName.trim()})});
+  if(r.ok){showToast('Group renamed','ok');await loadGroups();document.getElementById('mgTitle').textContent=newName.trim();
+    if(active?.type==='group'&&active.id===curGroupId){active.name=newName.trim();document.querySelector('.chat-title').textContent=newName.trim();}
+  } else{const d=await r.json();showToast(d.error,'err');}
+}
+
+async function deleteGroupFromModal(){
+  const g=myGroups.find(x=>x.id===curGroupId);
+  if(!confirm('Delete group "'+g?.name+'"? All messages will be lost.')) return;
+  const r=await fetch('/api/groups/'+curGroupId,{method:'DELETE'});
+  if(r.ok){closeModal('manageGroupModal');showToast('Group deleted','ok');
+    if(active?.type==='group'&&active.id===curGroupId){
+      active=null;document.getElementById('chatHead').innerHTML='<span style="color:var(--mut)">Select a conversation</span>';
+      document.getElementById('messages').innerHTML='<div class="empty-state"><div class="ei">💬</div><h3>Welcome to Maverick Chat</h3></div>';
+      document.getElementById('msgInput').disabled=true;
+    }
+    await loadGroups();
+  } else{const d=await r.json();showToast(d.error,'err');}
+}
+
+async function leaveGroup(){
+  if(!confirm('Leave this group?')) return;
+  const r=await fetch('/api/groups/'+curGroupId+'/members/'+me.id,{method:'DELETE'});
+  if(r.ok){closeModal('manageGroupModal');showToast('You left the group','ok');
+    if(active?.type==='group'&&active.id===curGroupId){active=null;}
+    await loadGroups();
+    if(active?.type==='group'){document.getElementById('chatHead').innerHTML='<span style="color:var(--mut)">Select a conversation</span>';}
+  } else{const d=await r.json();showToast(d.error,'err');}
+}
+
 // ====== CHAT ======
 async function loadChannels(){const r=await fetch('/api/channels');channels=await r.json();renderChannels()}
 async function loadUsers(){const r=await fetch('/api/users');users=await r.json();renderDMs()}
 async function loadUnread(){const r=await fetch('/api/unread');const d=await r.json();unread={};d.forEach(x=>{unread[x.sender_id]=x.count});renderDMs();updateChatBadge()}
 
 function updateChatBadge(){
-  const total=Object.values(unread).reduce((a,b)=>a+b,0);
+  const dmTotal=Object.values(unread).reduce((a,b)=>a+b,0);
+  const grpTotal=Object.values(groupUnread).reduce((a,b)=>a+b,0);
+  const total=dmTotal+grpTotal;
   const badge=document.getElementById('chatBadgeNav');
   badge.style.display=total>0?'inline':'none';badge.textContent=total;
 }
@@ -1207,6 +1436,7 @@ function sendMessage(){
   const input=document.getElementById('msgInput');const msg=input.value.trim();
   if (!msg||!active)return;
   if (active.type==='channel')socket.emit('channel_message',{channelId:active.id,message:msg});
+  else if(active.type==='group')socket.emit('group_message',{groupId:active.id,message:msg});
   else socket.emit('direct_message',{receiverId:active.id,message:msg});
   input.value='';input.style.height='auto';
 }
@@ -1223,6 +1453,14 @@ function connectSocket(){
   socket=io();
   socket.on('online_users',ids=>{onlineIds=new Set(ids);renderDMs()});
   socket.on('channel_message',msg=>{if(active?.type==='channel'&&active.id==msg.channel_id)appendMessage(msg)});
+  socket.on('group_message',msg=>{
+    if(active?.type==='group'&&active.id==msg.group_id){appendMessage(msg);}
+    else if(msg.sender_id!==me.id){groupUnread[msg.group_id]=(groupUnread[msg.group_id]||0)+1;renderGroups();updateChatBadge();}
+  });
+  socket.on('group_notification',({groupId,fromName,groupName})=>{
+    if(active?.type==='group'&&active.id==groupId) return;
+    groupUnread[groupId]=(groupUnread[groupId]||0)+1;renderGroups();updateChatBadge();
+  });
   socket.on('direct_message',msg=>{
     const other=msg.sender_id===me.id?msg.receiver_id:msg.sender_id;
     if(active?.type==='dm'&&active.id==other)appendMessage(msg);
