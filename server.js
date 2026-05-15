@@ -304,11 +304,28 @@ app.post('/api/users',auth,adminOnly,(req,res)=>{
     res.json({id:r.lastInsertRowid,username,name,role:role||'member',avatar_color:color});
   } catch { res.status(400).json({error:'Username already exists'}); }
 });
+app.put('/api/users/:id',auth,adminOnly,(req,res)=>{
+  const {name,username,role}=req.body;
+  if (!name||!username) return res.status(400).json({error:'Name and username required'});
+  const existing=db.prepare('SELECT id FROM users WHERE username=? AND id!=?').get(username.toLowerCase().trim(),req.params.id);
+  if (existing) return res.status(400).json({error:'Username already taken'});
+  db.prepare('UPDATE users SET name=?,username=?,role=? WHERE id=?').run(name.trim(),username.toLowerCase().trim(),role||'member',req.params.id);
+  res.json({ok:true});
+});
+app.put('/api/users/:id/password',auth,adminOnly,(req,res)=>{
+  const {password}=req.body;
+  if (!password||password.length<6) return res.status(400).json({error:'Password must be at least 6 characters'});
+  const hash=bcrypt.hashSync(password,10);
+  db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hash,req.params.id);
+  res.json({ok:true});
+});
 app.delete('/api/users/:id',auth,adminOnly,(req,res)=>{
-  const t=db.prepare('SELECT role FROM users WHERE id=?').get(req.params.id);
+  const t=db.prepare('SELECT role,id FROM users WHERE id=?').get(req.params.id);
   if (!t) return res.status(404).json({error:'Not found'});
-  if (t.role==='admin') return res.status(400).json({error:'Cannot delete admin'});
+  if (t.role==='admin'&&t.id===req.user.id) return res.status(400).json({error:'Cannot delete your own admin account'});
   db.prepare('DELETE FROM users WHERE id=?').run(req.params.id);
+  db.prepare('DELETE FROM user_stores WHERE user_id=?').run(req.params.id);
+  db.prepare('UPDATE users SET reports_to=NULL WHERE reports_to=?').run(req.params.id);
   res.json({ok:true});
 });
 app.get('/api/users/:id/stores',auth,(req,res)=>{
