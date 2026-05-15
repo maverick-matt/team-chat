@@ -577,14 +577,15 @@ app.get('/api/reports/timesheet/print',auth,(req,res)=>{
     const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);
     return h+'h'+(m>0?' '+m+'m':'');
   }
-  function fmtTZ(dt,tz){if(!dt)return '—';return new Date(dt).toLocaleTimeString('en-AU',{timeZone:tz||'Australia/Sydney',hour:'2-digit',minute:'2-digit'});}
+  function fmtTZ(dt,tz){if(!dt)return '—';const s=String(dt);const d=new Date(s.includes('T')||s.endsWith('Z')?s:s.replace(' ','T')+'Z');return d.toLocaleTimeString('en-AU',{timeZone:tz||'Australia/Sydney',hour:'2-digit',minute:'2-digit'});}
   const grouped={};
   rows.forEach(r=>{
     const key=r.store_name;
     if(!grouped[key])grouped[key]={store:r.store_name,tz:r.timezone,rows:[]};
     const sched_in=toMins(r.start_time),sched_out=toMins(r.end_time);
-    const actual_in=r.clock_in_at?toMins(new Date(r.clock_in_at).toLocaleTimeString('en-AU',{timeZone:r.timezone||'Australia/Sydney',hour:'2-digit',minute:'2-digit'}).replace(':',':')):null;
-    const actual_out=r.clock_out_at?toMins(new Date(r.clock_out_at).toLocaleTimeString('en-AU',{timeZone:r.timezone||'Australia/Sydney',hour:'2-digit',minute:'2-digit'}).replace(':',':')):null;
+    const _parseUTC=s=>{if(!s)return null;const t=String(s);return new Date(t.includes('T')||t.endsWith('Z')?t:t.replace(' ','T')+'Z');};
+    const actual_in=r.clock_in_at?toMins(_parseUTC(r.clock_in_at).toLocaleTimeString('en-AU',{timeZone:r.timezone||'Australia/Sydney',hour:'2-digit',minute:'2-digit'}).replace(':',':')):null;
+    const actual_out=r.clock_out_at?toMins(_parseUTC(r.clock_out_at).toLocaleTimeString('en-AU',{timeZone:r.timezone||'Australia/Sydney',hour:'2-digit',minute:'2-digit'}).replace(':',':')):null;
     let discrepancy='';
     if(sched_in!==null&&actual_in!==null){const diff=actual_in-sched_in;if(diff>5)discrepancy+=`Late ${diff}m. `;else if(diff<-5)discrepancy+=`Early in ${Math.abs(diff)}m. `;}
     if(sched_out!==null&&actual_out!==null){const diff=actual_out-sched_out;if(diff>15)discrepancy+=`+${diff}m overtime. `;else if(diff<-5)discrepancy+=`Left ${Math.abs(diff)}m early. `;}

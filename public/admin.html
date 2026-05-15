@@ -742,7 +742,7 @@ function exportCSV(){
   if (dateFrom) filtered=filtered.filter(r=>r.clock_in_at>=dateFrom);
   const rows=[['Name','Location','Clock In','Clock Out','Duration (hrs)','Notes']];
   filtered.forEach(r=>{
-    const dur=r.clock_out_at?((new Date(r.clock_out_at)-new Date(r.clock_in_at))/3600000).toFixed(2):'';
+    const dur=r.clock_out_at?((parseUTC(r.clock_out_at)-parseUTC(r.clock_in_at))/3600000).toFixed(2):'';
     rows.push([r.user_name,r.store_name,r.clock_in_at||'',r.clock_out_at||'',dur,r.notes||'']);
   });
   const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
@@ -751,12 +751,16 @@ function exportCSV(){
 }
 
 function durStr(inn,out){
-  const ms=new Date(out)-new Date(inn);
+  if(!inn||!out)return '—';
+  const ms=parseUTC(out)-parseUTC(inn);
   const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);
   return h+'h '+(m?m+'m':'');
 }
+// SQLite returns timestamps without timezone — force UTC parse
+function parseUTC(dt){if(!dt)return null;const s=String(dt);return new Date(s.includes('T')||s.endsWith('Z')?s:s.replace(' ','T')+'Z');}
 function fmtDT(dt,tz){
-  const d=new Date(dt);
+  const d=parseUTC(dt);
+  if(!d) return '—';
   const opts={day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'};
   if(tz) opts.timeZone=tz;
   const parts=new Intl.DateTimeFormat('en-AU',{...opts,timeZoneName:'short'}).formatToParts(d);
@@ -1302,8 +1306,8 @@ async function loadTSReport(){
 function renderTSReport(rows){
   const el=document.getElementById('tsReportBody');
   if(!rows.length){el.innerHTML='<div style="padding:24px;text-align:center;color:var(--mut)">No roster data found for this period.</div>';return}
-  function fmtTZ(dt,tz){if(!dt)return'—';return new Date(dt).toLocaleTimeString('en-AU',{timeZone:tz||'Australia/Sydney',hour:'2-digit',minute:'2-digit'});}
-  function durStr(inn,out){if(!inn||!out)return'—';const ms=new Date(out)-new Date(inn);const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);return h+'h'+(m?' '+m+'m':'');}
+  function fmtTZ(dt,tz){if(!dt)return'—';return parseUTC(dt).toLocaleTimeString('en-AU',{timeZone:tz||'Australia/Sydney',hour:'2-digit',minute:'2-digit'});}
+  function durStr(inn,out){if(!inn||!out)return'—';const ms=parseUTC(out)-parseUTC(inn);const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);return h+'h'+(m?' '+m+'m':'');}
   function toMins(t){if(!t)return null;const[h,m]=t.split(':').map(Number);return h*60+m;}
   function discrepancy(row){
     const tz=row.timezone||'Australia/Sydney';
@@ -1348,7 +1352,7 @@ async function loadPendingEdits(){
   const edits=await fetch('/api/timesheet/pending').then(r=>r.json()).catch(()=>[]);
   const tb=document.getElementById('pendingEditsTable');
   if(!edits.length){tb.innerHTML='<tr class="empty-row"><td colspan="8">No pending edit requests</td></tr>';return}
-  function fmtTZ(dt,tz){if(!dt)return'—';return new Date(dt).toLocaleTimeString('en-AU',{timeZone:tz||'Australia/Sydney',hour:'2-digit',minute:'2-digit'});}
+  function fmtTZ(dt,tz){if(!dt)return'—';return parseUTC(dt).toLocaleTimeString('en-AU',{timeZone:tz||'Australia/Sydney',hour:'2-digit',minute:'2-digit'});}
   tb.innerHTML=edits.map(e=>`<tr>
     <td><div style="display:flex;align-items:center;gap:6px"><div class="avatar" style="background:${e.avatar_color};width:22px;height:22px;font-size:9px">${initials(e.user_name)}</div>${esc(e.user_name)}</div></td>
     <td style="font-size:12px">📍 ${esc(e.store_name)}</td>

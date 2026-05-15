@@ -573,9 +573,9 @@ async function loadDashboard() {
     const weekStart=getWeekStart(new Date());
     let totalMs=0;
     recs.forEach(r=>{
-      const cIn=new Date(r.clock_in_at);
+      const cIn=parseUTC(r.clock_in_at);
       if (cIn>=weekStart){
-        const cOut=r.clock_out_at?new Date(r.clock_out_at):new Date();
+        const cOut=r.clock_out_at?parseUTC(r.clock_out_at):new Date();
         totalMs+=cOut-cIn;
       }
     });
@@ -612,10 +612,12 @@ async function loadDashboard() {
 
 function getWeekStart(d){const day=d.getDay();const diff=d.getDate()-day+(day===0?-6:1);return new Date(d.setDate(diff))}
 function fmtHours(ms){const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);return h+'h'+(m>0?' '+m+'m':'')}
+// SQLite returns "2026-05-15 01:43:00" (no timezone) — must append Z so JS treats it as UTC
+function parseUTC(dt){if(!dt)return null;const s=String(dt);return new Date(s.includes('T')||s.endsWith('Z')?s:s.replace(' ','T')+'Z');}
 function fmtDate(ds){return new Date(ds+'T00:00:00').toLocaleDateString('en-AU',{weekday:'short',month:'short',day:'numeric'})}
-function fmtTime(dt){return new Date(dt).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'})}
-function fmtTimeInTz(dt,tz){return new Date(dt).toLocaleTimeString('en-AU',{timeZone:tz||'Australia/Sydney',hour:'2-digit',minute:'2-digit'})}
-function fmtDateInTz(dt,tz){return new Date(dt).toLocaleDateString('en-AU',{timeZone:tz||'Australia/Sydney',weekday:'short',month:'short',day:'numeric'})}
+function fmtTime(dt){return parseUTC(dt).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'})}
+function fmtTimeInTz(dt,tz){return parseUTC(dt).toLocaleTimeString('en-AU',{timeZone:tz||'Australia/Sydney',hour:'2-digit',minute:'2-digit'})}
+function fmtDateInTz(dt,tz){return parseUTC(dt).toLocaleDateString('en-AU',{timeZone:tz||'Australia/Sydney',weekday:'short',month:'short',day:'numeric'})}
 function locationBadge(label,url,coords,dist){
   if (label) return `<span style="color:var(--grn)">📍 ${esc(label)}</span>`;
   if (url) return `<a href="${url}" target="_blank" rel="noopener" style="color:var(--amb);text-decoration:none">🗺 View on Maps <span style="font-size:10px;color:var(--mut)">(${dist}m from branch)</span></a>`;
@@ -814,7 +816,7 @@ function startElapsedTimer(){
   if (tcElapsedTimer) clearInterval(tcElapsedTimer);
   tcElapsedTimer=setInterval(()=>{
     if (tcStatus?.clocked_in&&tcStatus.record){
-      const ms=Date.now()-new Date(tcStatus.record.clock_in_at).getTime();
+      const ms=Date.now()-parseUTC(tcStatus.record.clock_in_at).getTime();
       const el=document.getElementById('tcElapsed');
       if (el) el.textContent=fmtDur(ms);
     }
@@ -849,7 +851,7 @@ async function loadTCRecords(){
 }
 
 function fmtDurShort(inn,out){
-  const ms=new Date(out)-new Date(inn);
+  const ms=parseUTC(out)-parseUTC(inn);
   const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);
   return h+'h'+(m>0?' '+m+'m':'');
 }
