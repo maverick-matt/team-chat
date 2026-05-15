@@ -7,46 +7,44 @@
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    :root{--bg:#111111;--surface:#1a1a1a;--border:#2a2a2a;--blue:#008ced;--blue-hover:#0d7ec9;--text:#F5F5F5;--muted:#6B7280;--error:#EF4444}
-    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center}
-    .bg-grid{position:fixed;inset:0;z-index:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:40px 40px;opacity:.4}
-    .glow{position:fixed;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(0,140,237,.1) 0%,transparent 70%);top:-100px;left:50%;transform:translateX(-50%);pointer-events:none;z-index:0}
-    .card{position:relative;z-index:1;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:48px 40px;width:100%;max-width:420px;box-shadow:0 24px 64px rgba(0,0,0,.5);animation:slideUp .5s ease}
-    @keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
-    .logo{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin-bottom:28px}
-    h1{font-family:'Syne',sans-serif;font-size:28px;font-weight:700;margin-bottom:6px}
-    .subtitle{color:var(--muted);font-size:14px;margin-bottom:32px}
-    label{display:block;font-size:13px;font-weight:500;color:var(--muted);margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase}
-    input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;padding:12px 16px;outline:none;transition:border-color .2s;margin-bottom:20px}
-    input:focus{border-color:var(--blue)}
-    button{width:100%;background:var(--blue);color:#fff;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;border:none;border-radius:10px;padding:14px;cursor:pointer;transition:background .2s;margin-top:4px}
-    button:hover{background:var(--blue-hover)}
+    body{font-family:'DM Sans',sans-serif;background:#FFFFFF;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+    .card{background:#FFFFFF;border-radius:20px;padding:36px;width:100%;max-width:380px;box-shadow:0 4px 24px rgba(13,30,53,.12)}
+    .logo-wrap{text-align:center;margin-bottom:24px}
+    .logo-wrap img{width:200px;height:auto;display:block;margin:0 auto 12px}
+    .logo-wrap h1{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:#000;margin:0}
+    .logo-wrap p{color:#7A96B8;font-size:13px;margin-top:4px}
+    label{display:block;font-size:11px;font-weight:700;color:#1C3B6E;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
+    .field{margin-bottom:14px}
+    input{width:100%;border:1px solid #d1d9e8;border-radius:8px;padding:10px 12px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .2s,box-shadow .2s;color:#0D1E35}
+    input:focus{border-color:#2B5EA7;box-shadow:0 0 0 3px rgba(43,94,167,.12)}
+    input::placeholder{color:#7A96B8}
+    button{width:100%;background:linear-gradient(135deg,#2B5EA7,#1C3B6E);color:#fff;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;border:none;border-radius:10px;padding:12px;cursor:pointer;transition:opacity .2s;margin-top:4px}
+    button:hover{opacity:.9}
     button:disabled{opacity:.6;cursor:not-allowed}
-    .error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--error);border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:16px;display:none}
+    .error{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#EF4444;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none}
     @media(max-width:480px){
-      body{align-items:flex-start;padding:24px 16px}
-      .card{padding:32px 20px;border-radius:14px}
-      h1{font-size:22px}
-      .bg-grid{opacity:.2}
+      body{align-items:flex-start;padding:20px 14px}
+      .card{padding:28px 20px}
     }
   </style>
 </head>
 <body>
-  <div class="bg-grid"></div>
-  <div class="glow"></div>
   <div class="card">
-    <div class="logo">
-      <img src="/images/maverick-logo.png" alt="Maverick Campers" style="height:38px;width:auto;display:block">
-      <span style="font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-top:6px">Team Hub</span>
+    <div class="logo-wrap">
+      <img src="/images/maverick-logo-original.png" alt="Maverick Campers">
+      <h1>Maverick Campers</h1>
+      <p>Team Hub</p>
     </div>
-    <h1>Welcome back</h1>
-    <p class="subtitle">Sign in to Maverick Team Hub</p>
     <div class="error" id="error"></div>
-    <label>Username</label>
-    <input type="text" id="username" placeholder="your.username" autocomplete="username"/>
-    <label>Password</label>
-    <input type="password" id="password" placeholder="••••••••" autocomplete="current-password"/>
-    <button id="loginBtn" onclick="login()">Sign In</button>
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="username" placeholder="your.username" autocomplete="username"/>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password"/>
+    </div>
+    <button id="loginBtn" onclick="login()">Sign In →</button>
   </div>
   <script>
     document.addEventListener('keydown',e=>{if(e.key==='Enter')login()});
@@ -63,7 +61,7 @@
         if(!res.ok){showErr(data.error||'Login failed');return}
         window.location.href='/app.html';
       }catch{showErr('Connection error. Please try again.')}
-      finally{btn.disabled=false;btn.textContent='Sign In'}
+      finally{btn.disabled=false;btn.textContent='Sign In →'}
     }
     function showErr(msg){const err=document.getElementById('error');err.textContent=msg;err.style.display='block'}
   </script>
