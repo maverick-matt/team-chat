@@ -469,6 +469,25 @@ textarea.fld{resize:vertical;min-height:80px;line-height:1.5}
 
 </div>
 
+<!-- TIMESHEET EDIT REQUEST MODAL -->
+<div class="overlay" id="tsEditModal">
+  <div class="modal">
+    <h2>Request Timesheet Correction</h2>
+    <p style="font-size:13px;color:var(--mut);margin-bottom:16px">Your line manager will need to approve this before the record is updated.</p>
+    <input type="hidden" id="tsEditRecordId"/>
+    <span class="fld-label">Corrected Clock In Time</span>
+    <input type="datetime-local" class="fld" id="tsEditIn" style="color-scheme:light"/>
+    <span class="fld-label">Corrected Clock Out Time</span>
+    <input type="datetime-local" class="fld" id="tsEditOut" style="color-scheme:light"/>
+    <span class="fld-label">Reason for correction *</span>
+    <textarea class="fld" id="tsEditReason" placeholder="e.g. Forgot to clock out at end of shift" rows="3"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('tsEditModal')">Cancel</button>
+      <button class="btn btn-amb" onclick="submitTSEdit()">Submit Request</button>
+    </div>
+  </div>
+</div>
+
 <!-- FORM FILL MODAL -->
 <div class="overlay" id="formModal">
   <div class="modal" style="width:560px">
@@ -743,11 +762,12 @@ async function loadTCRecords(){
       const isActive=!r.clock_out_at;
       const dur=isActive?'<span class="tr-active">● Active</span>':fmtDurShort(r.clock_in_at,r.clock_out_at);
       const tzAbbr=new Intl.DateTimeFormat('en-AU',{timeZone:tz,timeZoneName:'short'}).formatToParts(new Date()).find(p=>p.type==='timeZoneName')?.value||'';
-      return `<div class="tr-row">
+      return `<div class="tr-row" style="flex-wrap:wrap;gap:4px">
         <div class="tr-store">${r.store_name}</div>
         <div class="tr-date">${fmtDateInTz(r.clock_in_at,tz)}</div>
-        <div style="font-size:12px;color:var(--mut)">${fmtTimeInTz(r.clock_in_at,tz)}${r.clock_out_at?' – '+fmtTimeInTz(r.clock_out_at,tz):''} <span style="color:var(--mut);font-size:10px">${tzAbbr}</span></div>
+        <div style="font-size:12px;color:var(--mut)">${fmtTimeInTz(r.clock_in_at,tz)}${r.clock_out_at?' – '+fmtTimeInTz(r.clock_out_at,tz):''} <span style="font-size:10px">${tzAbbr}</span></div>
         <div class="tr-dur">${dur}</div>
+        ${!isActive&&r.clock_out_at?`<button class="btn btn-ghost" style="padding:3px 8px;font-size:11px;margin-left:auto" onclick="openTSEdit(${r.id},'${r.clock_in_at}','${r.clock_out_at}')">Request correction</button>`:''}
       </div>`;
     }).join('');
   } catch {}
@@ -809,7 +829,8 @@ function renderWeekGrid(weekStart){
         ${dayShifts.length?dayShifts.map(s=>`<div class="shift-block">
           <div class="sb-time">${s.start_time} – ${s.end_time}</div>
           <div class="sb-store">${s.store_name}</div>
-          ${s.role?`<div class="sb-role">${s.role}</div>`:''}
+          ${s.position_name?`<div class="sb-role" style="color:${s.position_color||'var(--amb)'}">${esc(s.position_name)}</div>`:''}
+          ${s.role?`<div class="sb-role">${esc(s.role)}</div>`:''}
         </div>`).join(''):'<div class="no-shifts">Off</div>'}
       </div>
     </div>`;
@@ -1063,6 +1084,25 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 function showTyping(t){document.getElementById('typingInd').textContent=t;clearTimeout(typingTimer);typingTimer=setTimeout(()=>{document.getElementById('typingInd').textContent=''},2500)}
 async function logout(){await fetch('/api/logout',{method:'POST'});location.href='/'}
+function openTSEdit(recordId, clockIn, clockOut){
+  document.getElementById('tsEditRecordId').value=recordId;
+  document.getElementById('tsEditIn').value=clockIn?clockIn.slice(0,16):'';
+  document.getElementById('tsEditOut').value=clockOut?clockOut.slice(0,16):'';
+  document.getElementById('tsEditReason').value='';
+  document.getElementById('tsEditModal').classList.add('show');
+}
+async function submitTSEdit(){
+  const id=document.getElementById('tsEditRecordId').value;
+  const inn=document.getElementById('tsEditIn').value;
+  const out=document.getElementById('tsEditOut').value;
+  const reason=document.getElementById('tsEditReason').value.trim();
+  if(!reason){showToast('Please provide a reason','err');return}
+  const r=await fetch('/api/timesheet/edits',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clock_record_id:parseInt(id),requested_clock_in:inn||null,requested_clock_out:out||null,reason})});
+  const d=await r.json();
+  if(!r.ok){showToast(d.error,'err');return}
+  closeModal('tsEditModal');showToast('Correction request submitted to your manager','ok');
+}
+
 function toggleSidebar(){document.querySelector('.sidebar').classList.toggle('open');document.getElementById('sbOverlay').classList.toggle('show')}
 function closeSidebar(){document.querySelector('.sidebar').classList.remove('open');document.getElementById('sbOverlay').classList.remove('show')}
 function initials(n){return n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}

@@ -128,9 +128,11 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
   <p class="page-sub">Manage your team, locations, rosters, forms and knowledge base</p>
   <div class="tabs">
     <div class="tab active" onclick="switchTab('users',this)">👥 Team</div>
+    <div class="tab" onclick="switchTab('positions',this)">🏷️ Positions</div>
     <div class="tab" onclick="switchTab('stores',this)">📍 Locations</div>
     <div class="tab" onclick="switchTab('timerecords',this)">⏱️ Time Records</div>
     <div class="tab" onclick="switchTab('rosters',this)">📅 Rosters</div>
+    <div class="tab" onclick="switchTab('tsreport',this)">📊 TS Report</div>
     <div class="tab" onclick="switchTab('forms',this)">📋 Forms</div>
     <div class="tab" onclick="switchTab('kb',this)">📚 Knowledge Base</div>
     <div class="tab" onclick="switchTab('channels',this)">💬 Channels</div>
@@ -140,8 +142,17 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
   <div class="panel active" id="panel-users">
     <div class="card">
       <div class="card-head"><div class="card-title">Team Members</div><button class="btn btn-amb" onclick="openAddUser()">+ Add Member</button></div>
-      <div class="tbl-wrap"><table><thead><tr><th>Member</th><th>Username</th><th>Role</th><th>Assigned Locations</th><th>Actions</th></tr></thead>
+      <div class="tbl-wrap"><table><thead><tr><th>Member</th><th>Username</th><th>Role</th><th>Position</th><th>Reports To</th><th>Locations</th><th>Actions</th></tr></thead>
       <tbody id="usersTable"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- POSITIONS -->
+  <div class="panel" id="panel-positions">
+    <div class="card">
+      <div class="card-head"><div class="card-title">Staff Positions</div><button class="btn btn-amb" onclick="openAddPosition()">+ Add Position</button></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Position</th><th>Colour</th><th>Sort Order</th><th>Actions</th></tr></thead>
+      <tbody id="positionsTable"><tr class="empty-row"><td colspan="4">Loading...</td></tr></tbody></table></div>
     </div>
   </div>
 
@@ -182,14 +193,41 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
       </div>
     </div>
     <div id="rosterEditView" style="display:none">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <div>
-          <button class="btn btn-ghost" onclick="showRosterList()" style="margin-right:10px">← All Rosters</button>
-          <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:18px" id="rosterEditTitle"></span>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="showRosterList()">← All Rosters</button>
+          <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px" id="rosterEditTitle"></span>
         </div>
-        <button class="btn btn-amb" onclick="openAddShift()">+ Add Shift</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-blue" onclick="openCloneRoster()">⧉ Clone Roster</button>
+          <button class="btn btn-amb" onclick="openAddShift()">+ Add Shift</button>
+        </div>
       </div>
       <div class="roster-grid-wrap"><div class="roster-grid" id="rosterEditGrid"></div></div>
+    </div>
+  </div>
+
+  <!-- TIMESHEET REPORT -->
+  <div class="panel" id="panel-tsreport">
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Timesheet &amp; Roster Discrepancy Report</div>
+        <div class="card-actions tr-filters">
+          <select id="tsStore"><option value="">All Locations</option></select>
+          <select id="tsUser"><option value="">All Staff</option></select>
+          <input type="date" id="tsFrom" style="width:140px">
+          <input type="date" id="tsTo" style="width:140px">
+          <button class="btn btn-amb" onclick="loadTSReport()">Run Report</button>
+          <button class="btn btn-ghost" onclick="printTSReport()">⬇ Export PDF</button>
+        </div>
+      </div>
+      <div id="tsReportBody" style="padding:20px;color:var(--mut);text-align:center">Select a date range and click Run Report.</div>
+    </div>
+    <!-- Pending timesheet edit requests -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-head"><div class="card-title">⏳ Pending Timesheet Edit Requests</div></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Staff</th><th>Location</th><th>Original Clock In</th><th>Original Clock Out</th><th>Requested In</th><th>Requested Out</th><th>Reason</th><th>Actions</th></tr></thead>
+      <tbody id="pendingEditsTable"><tr class="empty-row"><td colspan="8">Loading...</td></tr></tbody></table></div>
     </div>
   </div>
 
@@ -303,6 +341,39 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
   </div>
 </div>
 
+<!-- CLONE ROSTER MODAL -->
+<div class="overlay" id="cloneRosterModal">
+  <div class="modal"><h2>Clone Roster</h2>
+    <p style="font-size:13px;color:var(--mut);margin-bottom:16px">Creates a copy of all shifts in this roster onto a new week.</p>
+    <label>New Roster Name</label><input type="text" id="cloneName" placeholder="e.g. Week of 26 May"/>
+    <label>New Week Starting (Monday)</label><input type="date" id="cloneWeekStart" style="color-scheme:light"/>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('cloneRosterModal')">Cancel</button><button class="btn btn-amb" onclick="cloneRoster()">Clone</button></div>
+  </div>
+</div>
+
+<!-- ADD/EDIT POSITION MODAL -->
+<div class="overlay" id="positionModal">
+  <div class="modal"><h2 id="posModalTitle">Add Position</h2>
+    <input type="hidden" id="posEditId"/>
+    <label>Position Name</label><input type="text" id="posName" placeholder="e.g. Sales Team"/>
+    <div class="form-row">
+      <div><label>Colour</label><input type="color" id="posColor" value="#2B5EA7" style="height:38px;padding:4px"/></div>
+      <div><label>Sort Order</label><input type="number" id="posOrder" value="0"/></div>
+    </div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('positionModal')">Cancel</button><button class="btn btn-amb" onclick="savePosition()">Save</button></div>
+  </div>
+</div>
+
+<!-- EDIT REPORTING STRUCTURE MODAL -->
+<div class="overlay" id="editReportingModal">
+  <div class="modal"><h2>Reporting Structure — <span id="reportingUserName"></span></h2>
+    <input type="hidden" id="reportingUserId"/>
+    <label>Position</label><select id="reportingPosition" class="fld-select"><option value="">— No position —</option></select>
+    <label>Reports To (Line Manager)</label><select id="reportingManager" class="fld-select"><option value="">— No manager —</option></select>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('editReportingModal')">Cancel</button><button class="btn btn-amb" onclick="saveReporting()">Save</button></div>
+  </div>
+</div>
+
 <!-- ADD SHIFT MODAL -->
 <div class="overlay" id="addShiftModal">
   <div class="modal"><h2>Add Shift</h2>
@@ -313,7 +384,8 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
       <div><label>Start Time</label><input type="time" id="shiftStart"/></div>
       <div><label>End Time</label><input type="time" id="shiftEnd"/></div>
     </div>
-    <label>Role / Position (optional)</label><input type="text" id="shiftRole" placeholder="e.g. Sales Consultant"/>
+    <label>Position</label><select id="shiftPosition" class="fld-select"><option value="">— No position —</option></select>
+    <label>Custom Role Label (optional)</label><input type="text" id="shiftRole" placeholder="e.g. Floor Supervisor"/>
     <label>Notes (optional)</label><input type="text" id="shiftNotes" placeholder="Any shift notes"/>
     <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('addShiftModal')">Cancel</button><button class="btn btn-amb" onclick="addShift()">Add Shift</button></div>
   </div>
@@ -379,8 +451,8 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
 
 <div class="toast" id="toast"></div>
 <script>
-let users=[],channels=[],stores=[],allTimeRecords=[],rosters=[],kbCats=[],kbArticles=[];
-let curRosterId=null,curRosterWeekStart=null;
+let users=[],channels=[],stores=[],allTimeRecords=[],rosters=[],kbCats=[],kbArticles=[],positions=[];
+let curRosterId=null,curRosterWeekStart=null,curRosterName='';
 let editingStoreId=null,editingFormId=null,editingKBArticleId=null,editingKBCatId=null,editingUserStoresId=null;
 let fbFields=[];
 
@@ -388,6 +460,7 @@ async function init(){
   const me=await fetch('/api/me').then(r=>r.json()).catch(()=>null);
   if (!me||!['admin','manager'].includes(me.role)){location.href='/app.html';return}
   window._myRole=me.role;
+  positions=await fetch('/api/positions').then(r=>r.json()).catch(()=>[]);
   // Managers only see Forms and KB tabs — hide admin-only tabs
   if (me.role==='manager'){
     document.querySelectorAll('.tab').forEach(t=>{
@@ -417,6 +490,8 @@ function switchTab(name,el){
   if (name==='rosters') loadRosters();
   if (name==='forms') loadAdminForms();
   if (name==='kb') loadKBAdmin();
+  if (name==='positions') loadPositions();
+  if (name==='tsreport') initTSReport();
 }
 
 // ===== USERS =====
@@ -445,13 +520,17 @@ async function renderUsers(){
     try{const s=await fetch('/api/users/'+u.id+'/stores').then(r=>r.json());userStoreData[u.id]=s;}
     catch{userStoreData[u.id]=[];}
   }));
+  const managerMap={};users.forEach(u=>{managerMap[u.id]=u.name});
   tb.innerHTML=users.map(u=>`<tr>
     <td><div style="display:flex;align-items:center;gap:8px"><div class="avatar" style="background:${u.avatar_color}">${initials(u.name)}</div>${esc(u.name)}</div></td>
     <td style="color:var(--mut)">@${esc(u.username)}</td>
     <td><span class="role-badge role-${u.role}">${u.role==='admin'?'Admin':u.role==='manager'?'Manager':'Member'}</span></td>
-    <td>${(userStoreData[u.id]||[]).map(s=>`<span class="store-badge">📍 ${esc(s.name)}</span>`).join('')||'<span style="color:var(--mut)">None</span>'}</td>
+    <td>${u.position_id?(()=>{const p=positions.find(x=>x.id===u.position_id);return p?`<span style="background:${p.color}20;color:${p.color};border:1px solid ${p.color}40;border-radius:4px;padding:2px 7px;font-size:11px">${esc(p.name)}</span>`:'—'})():'<span style="color:var(--mut)">—</span>'}</td>
+    <td style="font-size:12px;color:var(--mut)">${u.reports_to?esc(managerMap[u.reports_to]||'—'):'—'}</td>
+    <td>${(userStoreData[u.id]||[]).map(s=>`<span class="store-badge">📍 ${esc(s.name)}</span>`).join('')||'<span style="color:var(--mut)">—</span>'}</td>
     <td>
-      <button class="btn btn-blue btn-sm" onclick="editUserStores(${u.id},'${esc(u.name)}')" style="margin-right:4px">Assign Stores</button>
+      <button class="btn btn-blue btn-sm" onclick="openEditReporting(${u.id},'${esc(u.name)}')" style="margin-right:4px">Structure</button>
+      <button class="btn btn-blue btn-sm" onclick="editUserStores(${u.id},'${esc(u.name)}')" style="margin-right:4px">Stores</button>
       ${u.role!=='admin'?`<button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id},'${esc(u.name)}')">Remove</button>`:''}
     </td>
   </tr>`).join('');
@@ -734,7 +813,7 @@ async function deleteRoster(id,name){
 }
 
 async function openRosterEdit(id,name,weekStart){
-  curRosterId=id;curRosterWeekStart=weekStart;
+  curRosterId=id;curRosterWeekStart=weekStart;curRosterName=name;
   document.getElementById('rosterEditTitle').textContent=name+' (w/c '+fmtDateShort(weekStart)+')';
   document.getElementById('rosterListView').style.display='none';
   document.getElementById('rosterEditView').style.display='block';
@@ -759,12 +838,13 @@ async function renderRosterGrid(){
     return `<div class="r-day-col">
       <div class="r-day-head">${d} ${date.getDate()}</div>
       <div class="r-day-body" id="day-${ds}">
-        ${dayShifts.map(s=>`<div class="r-shift" title="${esc(s.user_name)}\n${s.start_time}–${s.end_time}">
+        ${dayShifts.map(s=>{const pos=positions.find(p=>p.id===s.position_id);const col=pos?pos.color:'#2B5EA7';return`<div class="r-shift" title="${esc(s.user_name)}\n${s.start_time}–${s.end_time}" style="border-left:3px solid ${col}">
           <button class="r-shift-del" onclick="deleteShift(${s.id})" title="Remove">✕</button>
-          <div style="font-weight:600;color:var(--amb)">${esc(s.user_name.split(' ')[0])}</div>
+          <div style="font-weight:600;color:${col}">${esc(s.user_name.split(' ')[0])}</div>
           <div style="color:var(--mut)">${s.start_time}–${s.end_time}</div>
-          ${s.role?`<div style="color:var(--txt)">${esc(s.role)}</div>`:''}
-        </div>`).join('')}
+          ${pos?`<div style="font-size:10px;color:${col}">${esc(pos.name)}</div>`:''}
+          ${s.role?`<div style="font-size:10px;color:var(--mut)">${esc(s.role)}</div>`:''}
+        </div>`;}).join('')}
       </div>
       <button class="r-add-btn" onclick="openAddShiftForDate('${ds}')">+</button>
     </div>`;
@@ -786,6 +866,8 @@ function openAddShiftDialog(){
   users.forEach(u=>usel.add(new Option(u.name,u.id)));
   const ssel=document.getElementById('shiftStore');ssel.innerHTML='';
   stores.forEach(s=>ssel.add(new Option(s.name,s.id)));
+  const psel=document.getElementById('shiftPosition');psel.innerHTML='<option value="">— No position —</option>';
+  positions.forEach(p=>psel.add(new Option(p.name,p.id)));
   document.getElementById('shiftStart').value='09:00';
   document.getElementById('shiftEnd').value='17:00';
   document.getElementById('shiftRole').value='';
@@ -801,8 +883,9 @@ async function addShift(){
   const end_time=document.getElementById('shiftEnd').value;
   const role=document.getElementById('shiftRole').value;
   const notes=document.getElementById('shiftNotes').value;
+  const position_id=document.getElementById('shiftPosition').value||null;
   if (!shift_date||!start_time||!end_time){showToast('Date and times required','err');return}
-  const r=await fetch('/api/rosters/'+curRosterId+'/shifts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id,store_id,shift_date,start_time,end_time,role,notes})});
+  const r=await fetch('/api/rosters/'+curRosterId+'/shifts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id,store_id,shift_date,start_time,end_time,role,notes,position_id:position_id?parseInt(position_id):null})});
   if (r.ok){closeModal('addShiftModal');showToast('Shift added','ok');await renderRosterGrid();}
   else{const d=await r.json();showToast(d.error,'err');}
 }
@@ -1095,6 +1178,192 @@ async function deleteChannel(id,name){
   const r=await fetch('/api/channels/'+id,{method:'DELETE'});
   if (r.ok){showToast('#'+name+' deleted','ok');await loadChannels()}
   else{const d=await r.json();showToast(d.error,'err')}
+}
+
+// ===== POSITIONS =====
+async function loadPositions(){
+  positions=await fetch('/api/positions').then(r=>r.json()).catch(()=>[]);
+  const tb=document.getElementById('positionsTable');
+  if(!positions.length){tb.innerHTML='<tr class="empty-row"><td colspan="4">No positions yet</td></tr>';return}
+  tb.innerHTML=positions.map(p=>`<tr>
+    <td style="font-weight:500;display:flex;align-items:center;gap:8px">
+      <span style="width:12px;height:12px;border-radius:50%;background:${p.color};flex-shrink:0;display:inline-block"></span>${esc(p.name)}
+    </td>
+    <td><span style="background:${p.color}20;color:${p.color};border:1px solid ${p.color}40;border-radius:4px;padding:2px 8px;font-size:12px">${p.color}</span></td>
+    <td style="color:var(--mut)">${p.sort_order}</td>
+    <td>
+      <button class="btn btn-blue btn-sm" onclick="openEditPosition(${p.id})" style="margin-right:4px">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deletePosition(${p.id},'${esc(p.name)}')">Delete</button>
+    </td>
+  </tr>`).join('');
+}
+function openAddPosition(){
+  document.getElementById('posEditId').value='';
+  document.getElementById('posModalTitle').textContent='Add Position';
+  document.getElementById('posName').value='';
+  document.getElementById('posColor').value='#2B5EA7';
+  document.getElementById('posOrder').value='0';
+  document.getElementById('positionModal').classList.add('show');
+}
+function openEditPosition(id){
+  const p=positions.find(x=>x.id===id);
+  document.getElementById('posEditId').value=id;
+  document.getElementById('posModalTitle').textContent='Edit Position';
+  document.getElementById('posName').value=p.name;
+  document.getElementById('posColor').value=p.color;
+  document.getElementById('posOrder').value=p.sort_order;
+  document.getElementById('positionModal').classList.add('show');
+}
+async function savePosition(){
+  const id=document.getElementById('posEditId').value;
+  const name=document.getElementById('posName').value.trim();
+  const color=document.getElementById('posColor').value;
+  const sort_order=parseInt(document.getElementById('posOrder').value)||0;
+  if(!name){showToast('Name required','err');return}
+  if(id){
+    await fetch('/api/positions/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,color,sort_order})});
+  } else {
+    await fetch('/api/positions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,color,sort_order})});
+  }
+  closeModal('positionModal');showToast('Position saved','ok');await loadPositions();
+  positions=await fetch('/api/positions').then(r=>r.json());
+}
+async function deletePosition(id,name){
+  if(!confirm('Delete position "'+name+'"?'))return;
+  await fetch('/api/positions/'+id,{method:'DELETE'});
+  showToast('Deleted','ok');await loadPositions();
+}
+
+// ===== REPORTING STRUCTURE =====
+async function openEditReporting(uid,name){
+  document.getElementById('reportingUserId').value=uid;
+  document.getElementById('reportingUserName').textContent=name;
+  positions=await fetch('/api/positions').then(r=>r.json()).catch(()=>[]);
+  const rsel=document.getElementById('reportingPosition');
+  rsel.innerHTML='<option value="">— No position —</option>';
+  positions.forEach(p=>rsel.add(new Option(p.name,p.id)));
+  const msel=document.getElementById('reportingManager');
+  msel.innerHTML='<option value="">— No manager —</option>';
+  users.filter(u=>u.id!==uid&&['admin','manager'].includes(u.role)).forEach(u=>msel.add(new Option(u.name,u.id)));
+  const prof=await fetch('/api/users/'+uid+'/profile').then(r=>r.json()).catch(()=>null);
+  if(prof){rsel.value=prof.position_id||'';msel.value=prof.reports_to||'';}
+  document.getElementById('editReportingModal').classList.add('show');
+}
+async function saveReporting(){
+  const uid=document.getElementById('reportingUserId').value;
+  const position_id=document.getElementById('reportingPosition').value||null;
+  const reports_to=document.getElementById('reportingManager').value||null;
+  await fetch('/api/users/'+uid+'/manager',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({reports_to:reports_to?parseInt(reports_to):null,position_id:position_id?parseInt(position_id):null})});
+  closeModal('editReportingModal');showToast('Reporting structure updated','ok');await loadUsersAndStores();
+}
+
+// ===== ROSTER CLONE =====
+function openCloneRoster(){
+  document.getElementById('cloneName').value=curRosterName+' (Copy)';
+  document.getElementById('cloneWeekStart').value=getMonday();
+  document.getElementById('cloneRosterModal').classList.add('show');
+}
+async function cloneRoster(){
+  const new_name=document.getElementById('cloneName').value.trim();
+  const new_week_start=document.getElementById('cloneWeekStart').value;
+  if(!new_name||!new_week_start){showToast('Name and week required','err');return}
+  const r=await fetch('/api/rosters/'+curRosterId+'/clone',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({new_name,new_week_start})});
+  const d=await r.json();
+  if(!r.ok){showToast(d.error,'err');return}
+  closeModal('cloneRosterModal');showToast(`Cloned! ${d.shifts_copied} shifts copied.`,'ok');await loadRosters();
+}
+
+// ===== TIMESHEET REPORT =====
+async function initTSReport(){
+  const today=new Date().toISOString().slice(0,10);
+  const mon=getMonday();
+  document.getElementById('tsFrom').value=mon;
+  document.getElementById('tsTo').value=today;
+  const ssel=document.getElementById('tsStore');ssel.innerHTML='<option value="">All Locations</option>';
+  stores.forEach(s=>ssel.add(new Option(s.name,s.id)));
+  const usel=document.getElementById('tsUser');usel.innerHTML='<option value="">All Staff</option>';
+  users.forEach(u=>usel.add(new Option(u.name,u.id)));
+  await loadPendingEdits();
+}
+async function loadTSReport(){
+  const from=document.getElementById('tsFrom').value;
+  const to=document.getElementById('tsTo').value;
+  const store_id=document.getElementById('tsStore').value;
+  const user_id=document.getElementById('tsUser').value;
+  if(!from||!to){showToast('Select date range','err');return}
+  let url=`/api/reports/timesheet?from=${from}&to=${to}`;
+  if(store_id) url+=`&store_id=${store_id}`;
+  if(user_id) url+=`&user_id=${user_id}`;
+  const rows=await fetch(url).then(r=>r.json()).catch(()=>[]);
+  renderTSReport(rows);
+}
+function renderTSReport(rows){
+  const el=document.getElementById('tsReportBody');
+  if(!rows.length){el.innerHTML='<div style="padding:24px;text-align:center;color:var(--mut)">No roster data found for this period.</div>';return}
+  function fmtTZ(dt,tz){if(!dt)return'—';return new Date(dt).toLocaleTimeString('en-AU',{timeZone:tz||'Australia/Sydney',hour:'2-digit',minute:'2-digit'});}
+  function durStr(inn,out){if(!inn||!out)return'—';const ms=new Date(out)-new Date(inn);const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);return h+'h'+(m?' '+m+'m':'');}
+  function toMins(t){if(!t)return null;const[h,m]=t.split(':').map(Number);return h*60+m;}
+  function discrepancy(row){
+    const tz=row.timezone||'Australia/Sydney';
+    if(!row.clock_in_at&&row.shift_date<new Date().toISOString().slice(0,10)) return '<span style="color:var(--err);font-size:11px">⚠ No record</span>';
+    if(!row.clock_in_at) return '<span style="color:var(--mut);font-size:11px">—</span>';
+    let msgs=[],color='var(--grn)';
+    const sIn=toMins(row.start_time),sOut=toMins(row.end_time);
+    const aInStr=fmtTZ(row.clock_in_at,tz),aOutStr=row.clock_out_at?fmtTZ(row.clock_out_at,tz):null;
+    const aIn=toMins(aInStr),aOut=aOutStr?toMins(aOutStr):null;
+    if(aIn!==null&&sIn!==null){const d=aIn-sIn;if(d>5){msgs.push(`Late ${d}m`);color='var(--err)';}else if(d<-5){msgs.push(`Early in ${Math.abs(d)}m`);color='#F59E0B';}}
+    if(aOut!==null&&sOut!==null){const d=aOut-sOut;if(d>15){msgs.push(`+${d}m OT`);color='#F59E0B';}else if(d<-5){msgs.push(`Left ${Math.abs(d)}m early`);color='var(--err)';}}
+    return msgs.length?`<span style="color:${color};font-size:11px;font-weight:600">${msgs.join(' · ')}</span>`:'<span style="color:var(--grn);font-size:11px">✓ On time</span>';
+  }
+  // Group by store
+  const byStore={};
+  rows.forEach(r=>{if(!byStore[r.store_name])byStore[r.store_name]={tz:r.timezone,rows:[]};byStore[r.store_name].rows.push(r);});
+  el.innerHTML=Object.entries(byStore).map(([storeName,{tz,rows:sr}])=>`
+    <div style="font-weight:700;color:#1C3B6E;font-size:13px;padding:12px 20px;background:#F4F7FB;border-bottom:1px solid var(--brd)">📍 ${esc(storeName)}</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Staff</th><th>Position</th><th>Rostered</th><th>Clocked In</th><th>Clocked Out</th><th>Duration</th><th>Status</th></tr></thead>
+    <tbody>${sr.map(r=>`<tr>
+      <td style="font-size:12px;white-space:nowrap">${new Date(r.shift_date+'T00:00:00').toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'})}</td>
+      <td><div style="display:flex;align-items:center;gap:6px"><div class="avatar" style="background:${r.avatar_color};width:22px;height:22px;font-size:9px">${initials(r.user_name)}</div>${esc(r.user_name)}</div></td>
+      <td style="font-size:11px">${r.position_name?`<span style="background:${r.position_color}20;color:${r.position_color};border-radius:3px;padding:1px 6px">${esc(r.position_name)}</span>`:(esc(r.role)||'—')}</td>
+      <td style="font-size:12px;white-space:nowrap">${r.start_time}–${r.end_time}</td>
+      <td style="font-size:12px">${fmtTZ(r.clock_in_at,tz)}</td>
+      <td style="font-size:12px">${fmtTZ(r.clock_out_at,tz)}</td>
+      <td style="font-size:12px;font-weight:600">${durStr(r.clock_in_at,r.clock_out_at)}</td>
+      <td>${discrepancy(r)}</td>
+    </tr>`).join('')}</tbody></table></div>`).join('');
+}
+function printTSReport(){
+  const from=document.getElementById('tsFrom').value;
+  const to=document.getElementById('tsTo').value;
+  const store_id=document.getElementById('tsStore').value;
+  if(!from||!to){showToast('Select date range first','err');return}
+  let url=`/api/reports/timesheet/print?from=${from}&to=${to}`;
+  if(store_id) url+=`&store_id=${store_id}`;
+  window.open(url,'_blank');
+}
+async function loadPendingEdits(){
+  const edits=await fetch('/api/timesheet/pending').then(r=>r.json()).catch(()=>[]);
+  const tb=document.getElementById('pendingEditsTable');
+  if(!edits.length){tb.innerHTML='<tr class="empty-row"><td colspan="8">No pending edit requests</td></tr>';return}
+  function fmtTZ(dt,tz){if(!dt)return'—';return new Date(dt).toLocaleTimeString('en-AU',{timeZone:tz||'Australia/Sydney',hour:'2-digit',minute:'2-digit'});}
+  tb.innerHTML=edits.map(e=>`<tr>
+    <td><div style="display:flex;align-items:center;gap:6px"><div class="avatar" style="background:${e.avatar_color};width:22px;height:22px;font-size:9px">${initials(e.user_name)}</div>${esc(e.user_name)}</div></td>
+    <td style="font-size:12px">📍 ${esc(e.store_name)}</td>
+    <td style="font-size:12px">${fmtTZ(e.orig_in,e.timezone)}</td>
+    <td style="font-size:12px">${fmtTZ(e.orig_out,e.timezone)}</td>
+    <td style="font-size:12px;color:#2B5EA7">${fmtTZ(e.requested_clock_in,e.timezone)}</td>
+    <td style="font-size:12px;color:#2B5EA7">${fmtTZ(e.requested_clock_out,e.timezone)}</td>
+    <td style="font-size:12px;color:var(--mut)">${esc(e.reason||'—')}</td>
+    <td>
+      <button class="btn btn-blue btn-sm" onclick="reviewEdit(${e.id},'approved')" style="margin-right:4px">✓ Approve</button>
+      <button class="btn btn-danger btn-sm" onclick="reviewEdit(${e.id},'rejected')">✕ Reject</button>
+    </td>
+  </tr>`).join('');
+}
+async function reviewEdit(id,status){
+  const r=await fetch('/api/timesheet/edits/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+  if(r.ok){showToast(status==='approved'?'Edit approved — clock record updated':'Edit rejected','ok');await loadPendingEdits();}
+  else{const d=await r.json();showToast(d.error,'err');}
 }
 
 // ===== UTILS =====

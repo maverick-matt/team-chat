@@ -73,6 +73,12 @@ db.exec(`
     clock_out_lng REAL,
     notes TEXT DEFAULT ''
   );
+  CREATE TABLE IF NOT EXISTS positions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    color TEXT DEFAULT '#2B5EA7',
+    sort_order INTEGER DEFAULT 0
+  );
   CREATE TABLE IF NOT EXISTS rosters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -90,7 +96,20 @@ db.exec(`
     start_time TEXT NOT NULL,
     end_time TEXT NOT NULL,
     role TEXT DEFAULT '',
-    notes TEXT DEFAULT ''
+    notes TEXT DEFAULT '',
+    position_id INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS timesheet_edits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    clock_record_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    requested_clock_in DATETIME,
+    requested_clock_out DATETIME,
+    reason TEXT DEFAULT '',
+    status TEXT DEFAULT 'pending',
+    reviewed_by INTEGER,
+    reviewed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
   CREATE TABLE IF NOT EXISTS forms (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -147,8 +166,11 @@ if (!db.prepare('SELECT id FROM channels WHERE name = ?').get('general')) {
   db.prepare('INSERT INTO channels (name,description) VALUES (?,?)').run('random','Off-topic chat');
 }
 
-// Migrate existing stores table — add timezone column if missing
+// Migrations for existing tables
 try { db.exec("ALTER TABLE stores ADD COLUMN timezone TEXT DEFAULT 'Australia/Sydney'"); } catch(e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN reports_to INTEGER"); } catch(e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN position_id INTEGER"); } catch(e) {}
+try { db.exec("ALTER TABLE roster_shifts ADD COLUMN position_id INTEGER"); } catch(e) {}
 
 // Seed Maverick Campers store locations
 if (!db.prepare('SELECT id FROM stores LIMIT 1').get()) {
@@ -170,6 +192,17 @@ if (!db.prepare('SELECT id FROM stores LIMIT 1').get()) {
   };
   Object.entries(tzMap).forEach(([name,tz]) =>
     db.prepare("UPDATE stores SET timezone=? WHERE name=? AND (timezone IS NULL OR timezone='Australia/Sydney')").run(tz,name));
+}
+
+// Seed default positions
+if (!db.prepare('SELECT id FROM positions LIMIT 1').get()) {
+  const posSeeds=[
+    ['Management','#1C3B6E',0],['Sales Team','#2B5EA7',1],
+    ['Workshop Wangara','#10B981',2],['Workshop Adelaide','#10B981',3],
+    ['Workshop Caboolture','#10B981',4],['Workshop Campbellfield','#10B981',5],
+    ['Administration','#7A96B8',6],
+  ];
+  posSeeds.forEach(([name,color,sort_order])=>db.prepare('INSERT INTO positions (name,color,sort_order) VALUES (?,?,?)').run(name,color,sort_order));
 }
 
 // Seed KB categories
@@ -323,6 +356,39 @@ app.delete('/api/clock/records/:id',auth,adminOnly,(req,res)=>{
   res.json({ok:true});
 });
 
+// ---- POSITIONS ----
+app.get('/api/positions',auth,(req,res)=>{
+  res.json(db.prepare('SELECT * FROM positions ORDER BY sort_order,name').all());
+});
+app.post('/api/positions',auth,adminOnly,(req,res)=>{
+  const {name,color,sort_order}=req.body;
+  if (!name) return res.status(400).json({error:'Name required'});
+  const r=db.prepare('INSERT INTO positions (name,color,sort_order) VALUES (?,?,?)').run(name,color||'#2B5EA7',sort_order||0);
+  res.json({id:r.lastInsertRowid});
+});
+app.put('/api/positions/:id',auth,adminOnly,(req,res)=>{
+  const {name,color,sort_order}=req.body;
+  db.prepare('UPDATE positions SET name=?,color=?,sort_order=? WHERE id=?').run(name,color||'#2B5EA7',sort_order||0,req.params.id);
+  res.json({ok:true});
+});
+app.delete('/api/positions/:id',auth,adminOnly,(req,res)=>{
+  db.prepare('DELETE FROM positions WHERE id=?').run(req.params.id);
+  res.json({ok:true});
+});
+
+// User reporting structure + position
+app.put('/api/users/:id/manager',auth,adminOnly,(req,res)=>{
+  const {reports_to,position_id}=req.body;
+  db.prepare('UPDATE users SET reports_to=?,position_id=? WHERE id=?').run(reports_to||null,position_id||null,req.params.id);
+  res.json({ok:true});
+});
+app.get('/api/users/:id/profile',auth,(req,res)=>{
+  const uid=parseInt(req.params.id);
+  if (req.user.role!=='admin'&&req.user.id!==uid) return res.status(403).json({error:'Forbidden'});
+  const u=db.prepare('SELECT u.*,m.name as manager_name,p.name as position_name,p.color as position_color FROM users u LEFT JOIN users m ON m.id=u.reports_to LEFT JOIN positions p ON p.id=u.position_id WHERE u.id=?').get(uid);
+  res.json(u);
+});
+
 // ---- ROSTERS ----
 app.get('/api/rosters',auth,(req,res)=>{
   res.json(db.prepare('SELECT r.*,s.name as store_name FROM rosters r LEFT JOIN stores s ON s.id=r.store_id ORDER BY r.week_start DESC').all());
@@ -338,13 +404,30 @@ app.delete('/api/rosters/:id',auth,adminOnly,(req,res)=>{
   db.prepare('DELETE FROM rosters WHERE id=?').run(req.params.id);
   res.json({ok:true});
 });
+app.post('/api/rosters/:id/clone',auth,adminOnly,(req,res)=>{
+  const {new_name,new_week_start}=req.body;
+  if (!new_name||!new_week_start) return res.status(400).json({error:'New name and week start required'});
+  const orig=db.prepare('SELECT * FROM rosters WHERE id=?').get(req.params.id);
+  if (!orig) return res.status(404).json({error:'Roster not found'});
+  const origShifts=db.prepare('SELECT * FROM roster_shifts WHERE roster_id=?').all(req.params.id);
+  const origWeek=new Date(orig.week_start+'T00:00:00');
+  const newWeek=new Date(new_week_start+'T00:00:00');
+  const dayOffset=Math.round((newWeek-origWeek)/(864e5));
+  const newRoster=db.prepare('INSERT INTO rosters (name,store_id,week_start,created_by) VALUES (?,?,?,?)').run(new_name,orig.store_id,new_week_start,req.user.id);
+  origShifts.forEach(s=>{
+    const newDate=new Date(s.shift_date+'T00:00:00');
+    newDate.setDate(newDate.getDate()+dayOffset);
+    db.prepare('INSERT INTO roster_shifts (roster_id,user_id,store_id,shift_date,start_time,end_time,role,notes,position_id) VALUES (?,?,?,?,?,?,?,?,?)').run(newRoster.lastInsertRowid,s.user_id,s.store_id,newDate.toISOString().slice(0,10),s.start_time,s.end_time,s.role,s.notes,s.position_id||null);
+  });
+  res.json({id:newRoster.lastInsertRowid,shifts_copied:origShifts.length});
+});
 app.get('/api/rosters/:id/shifts',auth,(req,res)=>{
   res.json(db.prepare('SELECT rs.*,u.name as user_name,u.avatar_color,s.name as store_name FROM roster_shifts rs JOIN users u ON u.id=rs.user_id JOIN stores s ON s.id=rs.store_id WHERE rs.roster_id=? ORDER BY rs.shift_date,rs.start_time').all(req.params.id));
 });
 app.post('/api/rosters/:id/shifts',auth,adminOnly,(req,res)=>{
-  const {user_id,store_id,shift_date,start_time,end_time,role,notes}=req.body;
+  const {user_id,store_id,shift_date,start_time,end_time,role,notes,position_id}=req.body;
   if (!user_id||!store_id||!shift_date||!start_time||!end_time) return res.status(400).json({error:'Missing fields'});
-  const r=db.prepare('INSERT INTO roster_shifts (roster_id,user_id,store_id,shift_date,start_time,end_time,role,notes) VALUES (?,?,?,?,?,?,?,?)').run(req.params.id,user_id,store_id,shift_date,start_time,end_time,role||'',notes||'');
+  const r=db.prepare('INSERT INTO roster_shifts (roster_id,user_id,store_id,shift_date,start_time,end_time,role,notes,position_id) VALUES (?,?,?,?,?,?,?,?,?)').run(req.params.id,user_id,store_id,shift_date,start_time,end_time,role||'',notes||'',position_id||null);
   res.json({id:r.lastInsertRowid});
 });
 app.delete('/api/rosters/shifts/:id',auth,adminOnly,(req,res)=>{
@@ -353,12 +436,149 @@ app.delete('/api/rosters/shifts/:id',auth,adminOnly,(req,res)=>{
 });
 app.get('/api/my/shifts',auth,(req,res)=>{
   const from=req.query.from||new Date().toISOString().slice(0,10);
-  res.json(db.prepare('SELECT rs.*,r.name as roster_name,s.name as store_name FROM roster_shifts rs JOIN rosters r ON r.id=rs.roster_id JOIN stores s ON s.id=rs.store_id WHERE rs.user_id=? AND rs.shift_date>=? ORDER BY rs.shift_date,rs.start_time LIMIT 30').all(req.user.id,from));
+  res.json(db.prepare('SELECT rs.*,r.name as roster_name,s.name as store_name,p.name as position_name,p.color as position_color FROM roster_shifts rs JOIN rosters r ON r.id=rs.roster_id JOIN stores s ON s.id=rs.store_id LEFT JOIN positions p ON p.id=rs.position_id WHERE rs.user_id=? AND rs.shift_date>=? ORDER BY rs.shift_date,rs.start_time LIMIT 30').all(req.user.id,from));
 });
 app.get('/api/all/shifts',auth,adminOnly,(req,res)=>{
   const from=req.query.from||new Date().toISOString().slice(0,10);
   const to=req.query.to||new Date(Date.now()+14*864e5).toISOString().slice(0,10);
   res.json(db.prepare('SELECT rs.*,u.name as user_name,u.avatar_color,s.name as store_name FROM roster_shifts rs JOIN users u ON u.id=rs.user_id JOIN stores s ON s.id=rs.store_id WHERE rs.shift_date>=? AND rs.shift_date<=? ORDER BY rs.shift_date,rs.start_time').all(from,to));
+});
+
+// ---- TIMESHEET EDITS ----
+app.get('/api/timesheet/my-edits',auth,(req,res)=>{
+  const edits=db.prepare('SELECT te.*,s.name as store_name,s.timezone,m.name as reviewer_name FROM timesheet_edits te JOIN clock_records cr ON cr.id=te.clock_record_id JOIN stores s ON s.id=cr.store_id LEFT JOIN users m ON m.id=te.reviewed_by WHERE te.user_id=? ORDER BY te.created_at DESC LIMIT 30').all(req.user.id);
+  res.json(edits);
+});
+app.get('/api/timesheet/pending',auth,(req,res)=>{
+  // Returns edits for users who report to this manager (or all if admin)
+  let edits;
+  if (req.user.role==='admin'){
+    edits=db.prepare('SELECT te.*,u.name as user_name,u.avatar_color,cr.clock_in_at as orig_in,cr.clock_out_at as orig_out,s.name as store_name,s.timezone FROM timesheet_edits te JOIN users u ON u.id=te.user_id JOIN clock_records cr ON cr.id=te.clock_record_id JOIN stores s ON s.id=cr.store_id WHERE te.status=\'pending\' ORDER BY te.created_at DESC').all();
+  } else {
+    edits=db.prepare('SELECT te.*,u.name as user_name,u.avatar_color,cr.clock_in_at as orig_in,cr.clock_out_at as orig_out,s.name as store_name,s.timezone FROM timesheet_edits te JOIN users u ON u.id=te.user_id JOIN clock_records cr ON cr.id=te.clock_record_id JOIN stores s ON s.id=cr.store_id WHERE te.status=\'pending\' AND u.reports_to=? ORDER BY te.created_at DESC').all(req.user.id);
+  }
+  res.json(edits);
+});
+app.post('/api/timesheet/edits',auth,(req,res)=>{
+  const {clock_record_id,requested_clock_in,requested_clock_out,reason}=req.body;
+  if (!clock_record_id) return res.status(400).json({error:'Clock record required'});
+  const rec=db.prepare('SELECT * FROM clock_records WHERE id=? AND user_id=?').get(clock_record_id,req.user.id);
+  if (!rec) return res.status(404).json({error:'Record not found'});
+  const existing=db.prepare("SELECT id FROM timesheet_edits WHERE clock_record_id=? AND status='pending'").get(clock_record_id);
+  if (existing) return res.status(400).json({error:'A pending edit already exists for this record'});
+  const r=db.prepare('INSERT INTO timesheet_edits (clock_record_id,user_id,requested_clock_in,requested_clock_out,reason) VALUES (?,?,?,?,?)').run(clock_record_id,req.user.id,requested_clock_in||null,requested_clock_out||null,reason||'');
+  res.json({id:r.lastInsertRowid});
+});
+app.put('/api/timesheet/edits/:id',auth,(req,res)=>{
+  const {status}=req.body;
+  if (!['approved','rejected'].includes(status)) return res.status(400).json({error:'Invalid status'});
+  const edit=db.prepare('SELECT te.*,u.reports_to FROM timesheet_edits te JOIN users u ON u.id=te.user_id WHERE te.id=?').get(req.params.id);
+  if (!edit) return res.status(404).json({error:'Not found'});
+  if (req.user.role!=='admin'&&edit.reports_to!==req.user.id) return res.status(403).json({error:'Not your report'});
+  db.prepare('UPDATE timesheet_edits SET status=?,reviewed_by=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?').run(status,req.user.id,req.params.id);
+  if (status==='approved'){
+    db.prepare('UPDATE clock_records SET clock_in_at=COALESCE(?,clock_in_at),clock_out_at=COALESCE(?,clock_out_at) WHERE id=?').run(edit.requested_clock_in||null,edit.requested_clock_out||null,edit.clock_record_id);
+  }
+  res.json({ok:true});
+});
+
+// ---- TIMESHEET DISCREPANCY REPORT ----
+app.get('/api/reports/timesheet',auth,(req,res)=>{
+  if (req.user.role!=='admin'&&req.user.role!=='manager') return res.status(403).json({error:'Manager or Admin only'});
+  const {from,to,store_id,user_id}=req.query;
+  if (!from||!to) return res.status(400).json({error:'from and to dates required'});
+  let q=`SELECT rs.id as shift_id, rs.shift_date, rs.start_time, rs.end_time, rs.role, rs.notes,
+    u.id as user_id, u.name as user_name, u.avatar_color,
+    s.id as store_id, s.name as store_name, s.timezone,
+    p.name as position_name, p.color as position_color,
+    cr.id as clock_record_id, cr.clock_in_at, cr.clock_out_at,
+    te.id as edit_id, te.status as edit_status, te.requested_clock_in, te.requested_clock_out, te.reason as edit_reason
+    FROM roster_shifts rs
+    JOIN users u ON u.id=rs.user_id
+    JOIN stores s ON s.id=rs.store_id
+    LEFT JOIN positions p ON p.id=rs.position_id
+    LEFT JOIN clock_records cr ON cr.user_id=rs.user_id AND date(cr.clock_in_at)=rs.shift_date AND cr.store_id=rs.store_id
+    LEFT JOIN timesheet_edits te ON te.clock_record_id=cr.id AND te.status='approved'
+    WHERE rs.shift_date>=? AND rs.shift_date<=?`;
+  const args=[from,to];
+  if (store_id){q+=' AND rs.store_id=?';args.push(store_id);}
+  if (user_id){q+=' AND rs.user_id=?';args.push(user_id);}
+  q+=' ORDER BY rs.shift_date,u.name';
+  res.json(db.prepare(q).all(...args));
+});
+
+// Printable HTML timesheet report
+app.get('/api/reports/timesheet/print',auth,(req,res)=>{
+  if (req.user.role!=='admin'&&req.user.role!=='manager') return res.status(403).send('Forbidden');
+  const {from,to,store_id}=req.query;
+  if (!from||!to) return res.status(400).send('from and to required');
+  let q=`SELECT rs.shift_date,rs.start_time,rs.end_time,rs.role,
+    u.name as user_name,s.name as store_name,s.timezone,
+    p.name as position_name,p.color as position_color,
+    cr.clock_in_at,cr.clock_out_at,te.requested_clock_in,te.requested_clock_out,te.status as edit_status
+    FROM roster_shifts rs JOIN users u ON u.id=rs.user_id JOIN stores s ON s.id=rs.store_id
+    LEFT JOIN positions p ON p.id=rs.position_id
+    LEFT JOIN clock_records cr ON cr.user_id=rs.user_id AND date(cr.clock_in_at)=rs.shift_date AND cr.store_id=rs.store_id
+    LEFT JOIN timesheet_edits te ON te.clock_record_id=cr.id AND te.status='approved'
+    WHERE rs.shift_date>=? AND rs.shift_date<=?`;
+  const args=[from,to];
+  if(store_id){q+=' AND rs.store_id=?';args.push(store_id);}
+  q+=' ORDER BY s.name,rs.shift_date,u.name';
+  const rows=db.prepare(q).all(...args);
+  function toMins(t){if(!t)return null;const[h,m]=t.split(':').map(Number);return h*60+m;}
+  function durStr(inAt,outAt,tz){
+    if(!inAt||!outAt)return '—';
+    const ms=new Date(outAt)-new Date(inAt);
+    const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);
+    return h+'h'+(m>0?' '+m+'m':'');
+  }
+  function fmtTZ(dt,tz){if(!dt)return '—';return new Date(dt).toLocaleTimeString('en-AU',{timeZone:tz||'Australia/Sydney',hour:'2-digit',minute:'2-digit'});}
+  const grouped={};
+  rows.forEach(r=>{
+    const key=r.store_name;
+    if(!grouped[key])grouped[key]={store:r.store_name,tz:r.timezone,rows:[]};
+    const sched_in=toMins(r.start_time),sched_out=toMins(r.end_time);
+    const actual_in=r.clock_in_at?toMins(new Date(r.clock_in_at).toLocaleTimeString('en-AU',{timeZone:r.timezone||'Australia/Sydney',hour:'2-digit',minute:'2-digit'}).replace(':',':')):null;
+    const actual_out=r.clock_out_at?toMins(new Date(r.clock_out_at).toLocaleTimeString('en-AU',{timeZone:r.timezone||'Australia/Sydney',hour:'2-digit',minute:'2-digit'}).replace(':',':')):null;
+    let discrepancy='';
+    if(sched_in!==null&&actual_in!==null){const diff=actual_in-sched_in;if(diff>5)discrepancy+=`Late ${diff}m. `;else if(diff<-5)discrepancy+=`Early in ${Math.abs(diff)}m. `;}
+    if(sched_out!==null&&actual_out!==null){const diff=actual_out-sched_out;if(diff>15)discrepancy+=`+${diff}m overtime. `;else if(diff<-5)discrepancy+=`Left ${Math.abs(diff)}m early. `;}
+    if(!r.clock_in_at&&r.shift_date<new Date().toISOString().slice(0,10))discrepancy='No clock record';
+    grouped[key].rows.push({...r,discrepancy});
+  });
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Timesheet Report ${from} to ${to}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:12px;color:#0D1E35;padding:24px}
+h1{font-size:18px;color:#1C3B6E;margin-bottom:4px}
+.meta{color:#7A96B8;font-size:11px;margin-bottom:20px}
+.store-head{background:#1C3B6E;color:#fff;padding:8px 12px;font-weight:700;font-size:13px;margin-top:20px;border-radius:4px 4px 0 0}
+table{width:100%;border-collapse:collapse;margin-bottom:20px}
+th{background:#F4F7FB;color:#1C3B6E;font-size:10px;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;border:1px solid #d1d9e8;text-align:left}
+td{padding:6px 10px;border:1px solid #d1d9e8;font-size:11px;vertical-align:top}
+tr:nth-child(even) td{background:#fafbfd}
+.disc{color:#EF4444;font-size:10px;font-weight:600}
+.ok{color:#10B981;font-size:10px}
+.no-record{color:#EF4444}
+@media print{body{padding:12px}.store-head{margin-top:14px}table{page-break-inside:avoid}}
+</style></head><body>
+<h1>Timesheet Report — ${from} to ${to}</h1>
+<div class="meta">Generated ${new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · Maverick Campers & Caravans</div>
+${Object.values(grouped).map(g=>`
+<div class="store-head">📍 ${g.store} (${g.tz||'AU'})</div>
+<table><thead><tr><th>Date</th><th>Staff Member</th><th>Position</th><th>Rostered</th><th>Clocked In</th><th>Clocked Out</th><th>Duration</th><th>Discrepancy</th></tr></thead>
+<tbody>${g.rows.map(r=>`<tr>
+<td>${new Date(r.shift_date+'T00:00:00').toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'})}</td>
+<td>${r.user_name}</td>
+<td>${r.position_name||r.role||'—'}</td>
+<td>${r.start_time}–${r.end_time}</td>
+<td>${r.clock_in_at?fmtTZ(r.clock_in_at,r.timezone):'<span class="no-record">—</span>'}</td>
+<td>${r.clock_out_at?fmtTZ(r.clock_out_at,r.timezone):'<span class="no-record">—</span>'}</td>
+<td>${durStr(r.clock_in_at,r.clock_out_at,r.timezone)}</td>
+<td>${r.discrepancy?`<span class="disc">${r.discrepancy}</span>`:'<span class="ok">✓ On time</span>'}</td>
+</tr>`).join('')}</tbody></table>`).join('')}
+<script>window.print()</script>
+</body></html>`;
+  res.send(html);
 });
 
 // ---- FORMS ----
