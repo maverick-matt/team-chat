@@ -218,6 +218,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--txt);disp
 .typing-ind{font-size:12px;color:var(--mut);padding:3px 20px 0;height:18px}
 .admin-tag{font-size:10px;background:rgba(43,94,167,.12);color:#2B5EA7;border:1px solid rgba(43,94,167,.25);border-radius:4px;padding:1px 5px;vertical-align:middle;margin-left:4px}
 
+/* ORG CHART */
+.oc-node{display:flex;flex-direction:column;align-items:center}
+.oc-level{display:flex;flex-direction:row;justify-content:center;gap:24px;padding-top:36px}
+.oc-card{width:156px;flex-shrink:0;background:var(--sur);border:1px solid var(--brd);border-top:4px solid #1C3B6E;border-radius:10px;padding:14px 10px 10px;text-align:center;box-shadow:var(--shadow)}
+.oc-av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;margin:0 auto 8px}
+.oc-name{font-weight:700;font-size:12px;color:var(--txt);margin-bottom:3px;line-height:1.3}
+.oc-pos{font-size:10px;font-weight:600;margin-bottom:3px}
+.oc-role{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);padding:2px 6px;border-radius:8px;display:inline-block;background:rgba(122,150,184,.12)}
+@media(max-width:768px){.oc-card{width:128px}.oc-level{gap:12px}.oc-av{width:36px;height:36px;font-size:13px}}
+
 /* MOBILE TOP BAR */
 .mob-bar{display:none;align-items:center;gap:12px;height:52px;padding:0 16px;background:#1C3B6E;border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0;z-index:10}
 .mob-menu-btn{background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;line-height:1;cursor:pointer;padding:4px;display:flex;align-items:center;flex-shrink:0}
@@ -330,6 +340,9 @@ textarea.fld{resize:vertical;min-height:80px;line-height:1.5}
       </div>
       <div class="mod-item" data-module="kb" onclick="switchModule('kb')">
         <span class="mi">📚</span><span class="mod-label">Knowledge Base</span>
+      </div>
+      <div class="mod-item" data-module="orgchart" onclick="switchModule('orgchart')">
+        <span class="mi">🗂️</span><span class="mod-label">Org Chart</span>
       </div>
     </div>
     <div class="mod-divider"></div>
@@ -452,6 +465,17 @@ textarea.fld{resize:vertical;min-height:80px;line-height:1.5}
     </div>
   </div>
 
+  <!-- ORG CHART -->
+  <div class="panel" id="panel-orgchart">
+    <div class="ph"><span class="ph-icon">🗂️</span><span class="ph-title">Organisation Chart</span></div>
+    <div style="flex:1;overflow:auto;padding:24px;background:var(--bg)">
+      <div id="appOrgInner" style="position:relative;display:inline-block;min-width:100%">
+        <svg id="appOrgSvg" style="position:absolute;top:0;left:0;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div id="appOrgTree" style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- CHAT -->
   <div class="panel" id="panel-chat" style="display:none;flex-direction:column">
     <div class="chat-head" id="chatHead"><span style="color:var(--mut)">Select a channel or team member</span></div>
@@ -549,6 +573,7 @@ function switchModule(name) {
   else if (name==='schedule') loadSchedule();
   else if (name==='forms') loadForms();
   else if (name==='kb') loadKB();
+  else if (name==='orgchart') loadAppOrgChart();
   else if (name==='chat') {loadChannels();loadUsers();loadUnread();connectSocket();}
 }
 
@@ -1037,6 +1062,63 @@ async function kbOpenArticle(id){
       <div class="kb-article-body">${esc(a.content)}</div>
     </div>
   </div>`;
+}
+
+// ====== ORG CHART ======
+async function loadAppOrgChart(){
+  const people=await fetch('/api/org-chart').then(r=>r.json()).catch(()=>[]);
+  const treeEl=document.getElementById('appOrgTree');
+  const svg=document.getElementById('appOrgSvg');
+  const inner=document.getElementById('appOrgInner');
+  treeEl.innerHTML='';svg.innerHTML='';
+  if(!people.length){treeEl.innerHTML='<div style="padding:40px;color:var(--mut);text-align:center">No team members yet.</div>';return}
+  const byId={};
+  people.forEach(p=>byId[p.id]={...p,children:[]});
+  const roots=[];
+  people.forEach(p=>{if(p.reports_to&&byId[p.reports_to])byId[p.reports_to].children.push(byId[p.id]);else roots.push(byId[p.id]);});
+  const row=document.createElement('div');
+  row.style.cssText='display:flex;gap:24px;justify-content:center;flex-wrap:wrap';
+  roots.forEach(r=>row.appendChild(buildAppOCNode(r)));
+  treeEl.appendChild(row);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    svg.setAttribute('width',inner.scrollWidth);svg.setAttribute('height',inner.scrollHeight);
+    svg.style.width=inner.scrollWidth+'px';svg.style.height=inner.scrollHeight+'px';
+    inner.querySelectorAll('.oc-node[data-uid]').forEach(pn=>{
+      const pc=pn.querySelector(':scope > .oc-card');
+      const cl=pn.querySelector(':scope > .oc-level');
+      if(!pc||!cl) return;
+      const ir=inner.getBoundingClientRect();
+      const pr=pc.getBoundingClientRect();
+      const x1=pr.left+pr.width/2-ir.left,y1=pr.bottom-ir.top;
+      cl.querySelectorAll(':scope > .oc-node').forEach(cn=>{
+        const cc=cn.querySelector(':scope > .oc-card');if(!cc)return;
+        const cr=cc.getBoundingClientRect();
+        const x2=cr.left+cr.width/2-ir.left,y2=cr.top-ir.top,my=(y1+y2)/2;
+        const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+        path.setAttribute('d',`M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`);
+        path.setAttribute('stroke',getComputedStyle(document.documentElement).getPropertyValue('--brd').trim()||'#d1d9e8');
+        path.setAttribute('stroke-width','2');path.setAttribute('fill','none');
+        svg.appendChild(path);
+      });
+    });
+  }));
+}
+
+function buildAppOCNode(node){
+  const wrap=document.createElement('div');wrap.className='oc-node';wrap.dataset.uid=node.id;
+  const card=document.createElement('div');card.className='oc-card';
+  card.style.borderTopColor=node.position_color||'#1C3B6E';
+  card.innerHTML=`<div class="oc-av" style="background:${node.avatar_color}">${initials(node.name)}</div>
+    <div class="oc-name">${esc(node.name)}</div>
+    ${node.position_name?`<div class="oc-pos" style="color:${node.position_color||'var(--amb)'}">${esc(node.position_name)}</div>`:''}
+    <span class="oc-role">${node.role==='admin'?'Admin':node.role==='manager'?'Manager':'Member'}</span>`;
+  wrap.appendChild(card);
+  if(node.children.length){
+    const lvl=document.createElement('div');lvl.className='oc-level';lvl.dataset.pid=node.id;
+    node.children.forEach(c=>lvl.appendChild(buildAppOCNode(c)));
+    wrap.appendChild(lvl);
+  }
+  return wrap;
 }
 
 // ====== CHAT ======

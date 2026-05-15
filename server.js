@@ -410,6 +410,16 @@ app.delete('/api/clock/records/:id',auth,adminOnly,(req,res)=>{
   res.json({ok:true});
 });
 
+// ---- ORG CHART ----
+app.get('/api/org-chart',auth,(req,res)=>{
+  res.json(db.prepare(`
+    SELECT u.id,u.name,u.role,u.avatar_color,u.reports_to,u.position_id,
+      p.name as position_name,p.color as position_color,
+      (SELECT COUNT(*) FROM users sub WHERE sub.reports_to=u.id) as direct_reports
+    FROM users u LEFT JOIN positions p ON p.id=u.position_id ORDER BY u.name
+  `).all());
+});
+
 // ---- POSITIONS ----
 app.get('/api/positions',auth,(req,res)=>{
   res.json(db.prepare('SELECT * FROM positions ORDER BY sort_order,name').all());

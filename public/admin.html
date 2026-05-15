@@ -81,6 +81,25 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
 .tr-filters input,.tr-filters select{width:auto;background:var(--sur);border:1px solid var(--brd);border-radius:7px;color:var(--txt);font-family:'DM Sans';font-size:12px;padding:7px 11px;outline:none}
 .tr-filters input:focus,.tr-filters select:focus{border-color:var(--amb)}
 
+/* ===== ORG CHART ===== */
+.org-level{display:flex;flex-direction:row;justify-content:center;gap:32px;padding-top:40px;position:relative}
+.org-node{display:flex;flex-direction:column;align-items:center}
+.org-card{width:168px;flex-shrink:0;background:#fff;border:1px solid #d1d9e8;border-top:4px solid #1C3B6E;border-radius:10px;padding:16px 12px 12px;text-align:center;box-shadow:0 2px 12px rgba(13,30,53,.07);cursor:default;transition:box-shadow .2s,transform .15s}
+.org-card:hover{box-shadow:0 6px 24px rgba(13,30,53,.13);transform:translateY(-2px)}
+.org-avatar-lg{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;color:#fff;margin:0 auto 10px}
+.org-name{font-weight:700;font-size:13px;color:#0D1E35;line-height:1.3;margin-bottom:4px}
+.org-pos{font-size:11px;font-weight:600;margin-bottom:3px}
+.org-role-badge{display:inline-block;font-size:9px;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:10px;margin-top:4px}
+.org-role-admin{background:rgba(0,140,237,.12);color:#1C3B6E}
+.org-role-manager{background:rgba(16,185,129,.12);color:#059669}
+.org-role-member{background:rgba(122,150,184,.12);color:#7A96B8}
+.org-reports-count{font-size:10px;color:#7A96B8;margin-top:5px;padding-top:5px;border-top:1px solid #f0f3f8}
+@media print{
+  #orgChartWrap{overflow:visible!important;border:none}
+  .btn{display:none}
+  .org-card{break-inside:avoid}
+}
+
 /* ===== MOBILE RESPONSIVE ===== */
 @media(max-width:768px){
   .topbar{padding:0 14px;height:50px}
@@ -128,6 +147,7 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
   <p class="page-sub">Manage your team, locations, rosters, forms and knowledge base</p>
   <div class="tabs">
     <div class="tab active" onclick="switchTab('users',this)">👥 Team</div>
+    <div class="tab" onclick="switchTab('orgchart',this)">🗂️ Org Chart</div>
     <div class="tab" onclick="switchTab('positions',this)">🏷️ Positions</div>
     <div class="tab" onclick="switchTab('stores',this)">📍 Locations</div>
     <div class="tab" onclick="switchTab('timerecords',this)">⏱️ Time Records</div>
@@ -144,6 +164,31 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
       <div class="card-head"><div class="card-title">Team Members</div><button class="btn btn-amb" onclick="openAddUser()">+ Add Member</button></div>
       <div class="tbl-wrap"><table><thead><tr><th>Member</th><th>Username</th><th>Role</th><th>Position</th><th>Reports To</th><th>Locations</th><th>Actions</th></tr></thead>
       <tbody id="usersTable"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- ORG CHART -->
+  <div class="panel" id="panel-orgchart">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:var(--txt)">Organisation Chart</div>
+        <div style="font-size:12px;color:var(--mut);margin-top:2px">Based on reporting structure set in Team → Structure. Assign managers to staff to populate this chart.</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="loadOrgChart()">⟳ Refresh</button>
+        <button class="btn btn-ghost" onclick="printOrgChart()">⬇ Print / Export</button>
+      </div>
+    </div>
+    <div id="orgChartWrap" style="background:var(--bg);border:1px solid var(--brd);border-radius:14px;overflow:auto;min-height:300px;position:relative">
+      <div id="orgChartInner" style="padding:32px;position:relative;display:inline-block;min-width:100%">
+        <svg id="orgSvg" style="position:absolute;top:0;left:0;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div id="orgTree" style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center"></div>
+      </div>
+    </div>
+    <!-- Unassigned section -->
+    <div id="orgUnassigned" style="margin-top:20px;display:none">
+      <div style="font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:10px">⚠ No Manager Assigned</div>
+      <div id="orgUnassignedCards" style="display:flex;flex-wrap:wrap;gap:12px"></div>
     </div>
   </div>
 
@@ -527,6 +572,7 @@ function switchTab(name,el){
   if (name==='kb') loadKBAdmin();
   if (name==='positions') loadPositions();
   if (name==='tsreport') initTSReport();
+  if (name==='orgchart') loadOrgChart();
 }
 
 // ===== USERS =====
@@ -1221,6 +1267,131 @@ async function deleteChannel(id,name){
   const r=await fetch('/api/channels/'+id,{method:'DELETE'});
   if (r.ok){showToast('#'+name+' deleted','ok');await loadChannels()}
   else{const d=await r.json();showToast(d.error,'err')}
+}
+
+// ===== ORG CHART =====
+async function loadOrgChart(){
+  const people=await fetch('/api/org-chart').then(r=>r.json()).catch(()=>[]);
+  if(!people.length){document.getElementById('orgTree').innerHTML='<div style="padding:40px;color:var(--mut);text-align:center">No team members yet.</div>';return}
+
+  // Build tree
+  const byId={};
+  people.forEach(p=>byId[p.id]={...p,children:[]});
+  const roots=[];
+  people.forEach(p=>{
+    if(p.reports_to&&byId[p.reports_to]) byId[p.reports_to].children.push(byId[p.id]);
+    else roots.push(byId[p.id]);
+  });
+
+  // Split into "has place in tree" vs truly unassigned
+  const inTree=roots.filter(r=>r.children.length||people.some(p=>p.reports_to===r.id)||r.role==='admin'||r.role==='manager');
+  const orphans=roots.filter(r=>!inTree.includes(r));
+
+  // Render tree
+  const treeEl=document.getElementById('orgTree');
+  treeEl.innerHTML='';
+  if(inTree.length){
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;gap:32px;justify-content:center;flex-wrap:wrap';
+    inTree.forEach(root=>row.appendChild(buildOrgNode(root)));
+    treeEl.appendChild(row);
+  }
+
+  // Unassigned
+  const unEl=document.getElementById('orgUnassigned');
+  const unCards=document.getElementById('orgUnassignedCards');
+  unCards.innerHTML='';
+  if(orphans.length){
+    unEl.style.display='block';
+    orphans.forEach(p=>{
+      const c=document.createElement('div');c.className='org-card';c.style.width='148px';
+      c.style.borderTopColor=p.position_color||'#7A96B8';
+      c.innerHTML=orgCardInner(p);
+      unCards.appendChild(c);
+    });
+  } else { unEl.style.display='none'; }
+
+  // Draw SVG connectors after layout
+  requestAnimationFrame(()=>requestAnimationFrame(()=>drawOrgLines()));
+}
+
+function buildOrgNode(node){
+  const wrap=document.createElement('div');
+  wrap.className='org-node';
+  wrap.dataset.userId=node.id;
+
+  const card=document.createElement('div');
+  card.className='org-card';
+  card.style.borderTopColor=node.position_color||'#1C3B6E';
+  card.innerHTML=orgCardInner(node);
+  wrap.appendChild(card);
+
+  if(node.children.length){
+    const childRow=document.createElement('div');
+    childRow.className='org-level';
+    childRow.dataset.parentId=node.id;
+    node.children.forEach(child=>childRow.appendChild(buildOrgNode(child)));
+    wrap.appendChild(childRow);
+  }
+  return wrap;
+}
+
+function orgCardInner(p){
+  const roleClass='org-role-'+(p.role||'member');
+  const roleLabel=p.role==='admin'?'Admin':p.role==='manager'?'Manager':'Team Member';
+  return `<div class="org-avatar-lg" style="background:${p.avatar_color}">${initials(p.name)}</div>
+    <div class="org-name">${esc(p.name)}</div>
+    ${p.position_name?`<div class="org-pos" style="color:${p.position_color}">${esc(p.position_name)}</div>`:''}
+    <span class="org-role-badge ${roleClass}">${roleLabel}</span>
+    ${p.direct_reports>0?`<div class="org-reports-count">${p.direct_reports} direct report${p.direct_reports!==1?'s':''}</div>`:''}`;
+}
+
+function drawOrgLines(){
+  const svg=document.getElementById('orgSvg');
+  const inner=document.getElementById('orgChartInner');
+  if(!svg||!inner) return;
+
+  // Size SVG to match inner container
+  const iRect=inner.getBoundingClientRect();
+  svg.setAttribute('width',inner.scrollWidth);
+  svg.setAttribute('height',inner.scrollHeight);
+  svg.style.width=inner.scrollWidth+'px';
+  svg.style.height=inner.scrollHeight+'px';
+  svg.innerHTML='';
+
+  // For each parent node, draw curves to each child node
+  inner.querySelectorAll('.org-node[data-user-id]').forEach(parentNode=>{
+    const parentCard=parentNode.querySelector(':scope > .org-card');
+    if(!parentCard) return;
+    const childLevel=parentNode.querySelector(':scope > .org-level');
+    if(!childLevel) return;
+
+    const pr=parentCard.getBoundingClientRect();
+    const irOff=inner.getBoundingClientRect();
+
+    const x1=pr.left+pr.width/2-irOff.left;
+    const y1=pr.bottom-irOff.top;
+
+    childLevel.querySelectorAll(':scope > .org-node').forEach(childNode=>{
+      const childCard=childNode.querySelector(':scope > .org-card');
+      if(!childCard) return;
+      const cr=childCard.getBoundingClientRect();
+      const x2=cr.left+cr.width/2-irOff.left;
+      const y2=cr.top-irOff.top;
+      const midY=(y1+y2)/2;
+
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d',`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`);
+      path.setAttribute('stroke','#d1d9e8');
+      path.setAttribute('stroke-width','2');
+      path.setAttribute('fill','none');
+      svg.appendChild(path);
+    });
+  });
+}
+
+function printOrgChart(){
+  window.print();
 }
 
 // ===== POSITIONS =====
