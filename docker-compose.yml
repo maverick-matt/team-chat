@@ -6,10 +6,11 @@ services:
     image: team-chat:latest
     container_name: team-chat
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - JWT_SECRET=maverick-secret-2024
       - DB_PATH=/data/chat.db
     volumes:
       - team_chat_data:/data
@@ -17,7 +18,7 @@ services:
       - traefik
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.team-chat.rule=Host(`team-chat.srv1669884.hstgr.cloud`)"
+      - "traefik.http.routers.team-chat.rule=Host(`team-chat.srv1669884.hstgr.cloud`) || Host(`teamhub.maverickapp.com.au`)"
       - traefik.http.routers.team-chat.tls=true
       - traefik.http.routers.team-chat.entrypoints=web,websecure
       - traefik.http.routers.team-chat.tls.certresolver=mytlschallenge

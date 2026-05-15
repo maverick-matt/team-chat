@@ -349,6 +349,8 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
     <input type="hidden" id="editUserId"/>
     <label>Full Name</label><input type="text" id="editUserName" placeholder="Jane Smith"/>
     <label>Username</label><input type="text" id="editUserUsername" placeholder="jane.smith"/>
+    <label>Email <span style="font-weight:400;text-transform:none;color:var(--mut)">(for password reset)</span></label>
+    <input type="email" id="editUserEmail" placeholder="jane@example.com"/>
     <label>Role</label>
     <select id="editUserRole">
       <option value="member">Member</option>
@@ -611,10 +613,10 @@ async function renderUsers(){
     <td>${(userStoreData[u.id]||[]).map(s=>`<span class="store-badge">📍 ${esc(s.name)}</span>`).join('')||'<span style="color:var(--mut)">—</span>'}</td>
     <td style="white-space:nowrap">
       <button class="btn btn-blue btn-sm" onclick="openEditUser(${u.id})" style="margin-right:4px">✏ Edit</button>
-      <button class="btn btn-ghost btn-sm" onclick="openResetPw(${u.id},'${esc(u.name)}')" style="margin-right:4px">🔑 Password</button>
-      <button class="btn btn-blue btn-sm" onclick="openEditReporting(${u.id},'${esc(u.name)}')" style="margin-right:4px">Structure</button>
-      <button class="btn btn-blue btn-sm" onclick="editUserStores(${u.id},'${esc(u.name)}')" style="margin-right:4px">Stores</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id},'${esc(u.name)}')">Remove</button>
+      <button class="btn btn-ghost btn-sm" onclick="openResetPw(${u.id})" style="margin-right:4px">🔑 Password</button>
+      <button class="btn btn-blue btn-sm" onclick="openEditReporting(${u.id})" style="margin-right:4px">Structure</button>
+      <button class="btn btn-blue btn-sm" onclick="editUserStores(${u.id})" style="margin-right:4px">Stores</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id})">Remove</button>
     </td>
   </tr>`).join('');
 }
@@ -642,14 +644,16 @@ async function addUser(){
   showToast(name+' added!','ok');await loadUsersAndStores();
 }
 
-async function deleteUser(id,name){
+async function deleteUser(id){
+  const name=(users.find(u=>u.id===id)||{}).name||'this user';
   if(!confirm('Permanently delete '+name+'?\n\nThis removes their account, store assignments and reporting links. Clock records are kept.'))return;
   const r=await fetch('/api/users/'+id,{method:'DELETE'});
   if(r.ok){showToast(name+' deleted','ok');await loadUsersAndStores();}
   else{const d=await r.json();showToast(d.error,'err');}
 }
 
-async function editUserStores(uid,name){
+async function editUserStores(uid){
+  const name=(users.find(u=>u.id===uid)||{}).name||'';
   editingUserStoresId=uid;
   document.getElementById('editUserStoresName').textContent=name;
   const assigned=await fetch('/api/users/'+uid+'/stores').then(r=>r.json()).catch(()=>[]);
@@ -1449,7 +1453,8 @@ async function deletePosition(id,name){
 }
 
 // ===== REPORTING STRUCTURE =====
-async function openEditReporting(uid,name){
+async function openEditReporting(uid){
+  const name=(users.find(u=>u.id===uid)||{}).name||'';
   document.getElementById('reportingUserId').value=uid;
   document.getElementById('reportingUserName').textContent=name;
   positions=await fetch('/api/positions').then(r=>r.json()).catch(()=>[]);
@@ -1588,6 +1593,7 @@ function openEditUser(id){
   document.getElementById('editUserId').value=id;
   document.getElementById('editUserName').value=u.name;
   document.getElementById('editUserUsername').value=u.username;
+  document.getElementById('editUserEmail').value=u.email||'';
   document.getElementById('editUserRole').value=u.role;
   document.getElementById('editUserModal').classList.add('show');
 }
@@ -1595,16 +1601,18 @@ async function saveEditUser(){
   const id=document.getElementById('editUserId').value;
   const name=document.getElementById('editUserName').value.trim();
   const username=document.getElementById('editUserUsername').value.trim();
+  const email=document.getElementById('editUserEmail').value.trim();
   const role=document.getElementById('editUserRole').value;
   if(!name||!username){showToast('Name and username required','err');return}
-  const r=await fetch('/api/users/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,username,role})});
+  const r=await fetch('/api/users/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,username,role,email})});
   const d=await r.json();
   if(!r.ok){showToast(d.error,'err');return}
   closeModal('editUserModal');showToast('User updated','ok');await loadUsersAndStores();
 }
 
 // ===== RESET PASSWORD =====
-function openResetPw(id,name){
+function openResetPw(id){
+  const name=(users.find(u=>u.id===id)||{}).name||'';
   document.getElementById('resetPwUserId').value=id;
   document.getElementById('resetPwName').textContent=name;
   document.getElementById('resetPwInput').value='';

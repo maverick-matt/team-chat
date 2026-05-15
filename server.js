@@ -6,6 +6,10 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const crypto = require('crypto');
+const speakeasy = require('speakeasy');
+const QRCode = require('qrcode');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const httpServer = createServer(app);
@@ -196,6 +200,32 @@ try { db.exec("ALTER TABLE stores ADD COLUMN timezone TEXT DEFAULT 'Australia/Sy
 try { db.exec("ALTER TABLE users ADD COLUMN reports_to INTEGER"); } catch(e) {}
 try { db.exec("ALTER TABLE users ADD COLUMN position_id INTEGER"); } catch(e) {}
 try { db.exec("ALTER TABLE roster_shifts ADD COLUMN position_id INTEGER"); } catch(e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN mfa_secret TEXT"); } catch(e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN mfa_enabled INTEGER DEFAULT 0"); } catch(e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN email TEXT"); } catch(e) {}
+db.exec(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  token TEXT UNIQUE NOT NULL,
+  expires_at TEXT NOT NULL,
+  used INTEGER DEFAULT 0
+)`);
+
+function sendResetEmail(toEmail, toName, resetUrl) {
+  if (!process.env.SMTP_HOST) return;
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+  });
+  transporter.sendMail({
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    to: toEmail,
+    subject: 'Maverick Hub – Password Reset',
+    html: `<p>Hi ${toName},</p><p>Click the link below to reset your Maverick Hub password (valid for 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can safely ignore this email.</p>`
+  }).catch(()=>{});
+}
 
 // Seed Maverick Campers store locations
 if (!db.prepare('SELECT id FROM stores LIMIT 1').get()) {
@@ -302,13 +332,87 @@ function enrichLocation(rec) {
 // ---- AUTH ----
 app.post('/api/login',(req,res)=>{
   const {username,password}=req.body;
-  const user=db.prepare('SELECT * FROM users WHERE username=?').get(username);
+  const user=db.prepare('SELECT * FROM users WHERE username=?').get(username?.toLowerCase?.().trim());
   if (!user||!bcrypt.compareSync(password,user.password_hash))
     return res.status(401).json({error:'Invalid username or password'});
+  if (user.mfa_enabled) {
+    const tempToken=jwt.sign({id:user.id,mfa_pending:true},JWT_SECRET,{expiresIn:'5m'});
+    return res.json({mfa_required:true,temp_token:tempToken});
+  }
   const token=jwt.sign({id:user.id,username:user.username,name:user.name,role:user.role},JWT_SECRET,{expiresIn:'7d'});
   res.cookie('token',token,{httpOnly:true,maxAge:7*24*60*60*1000});
   res.json({id:user.id,username:user.username,name:user.name,role:user.role,avatar_color:user.avatar_color});
 });
+
+app.post('/api/login/mfa',(req,res)=>{
+  const {temp_token,code}=req.body;
+  let payload;
+  try{payload=jwt.verify(temp_token,JWT_SECRET);}catch{return res.status(401).json({error:'Session expired, please log in again'});}
+  if(!payload.mfa_pending) return res.status(401).json({error:'Invalid token'});
+  const user=db.prepare('SELECT * FROM users WHERE id=?').get(payload.id);
+  if(!user||!user.mfa_enabled||!user.mfa_secret) return res.status(401).json({error:'MFA not configured'});
+  const ok=speakeasy.totp.verify({secret:user.mfa_secret,encoding:'base32',token:String(code).replace(/\s/g,''),window:1});
+  if(!ok) return res.status(401).json({error:'Invalid authentication code'});
+  const token=jwt.sign({id:user.id,username:user.username,name:user.name,role:user.role},JWT_SECRET,{expiresIn:'7d'});
+  res.cookie('token',token,{httpOnly:true,maxAge:7*24*60*60*1000});
+  res.json({id:user.id,username:user.username,name:user.name,role:user.role,avatar_color:user.avatar_color});
+});
+
+app.post('/api/forgot-password',(req,res)=>{
+  const {username}=req.body;
+  const user=db.prepare('SELECT * FROM users WHERE username=?').get(username?.toLowerCase?.().trim());
+  if(user&&user.email){
+    const token=crypto.randomBytes(32).toString('hex');
+    const expires=new Date(Date.now()+60*60*1000).toISOString().replace('T',' ').split('.')[0];
+    db.prepare('DELETE FROM password_reset_tokens WHERE user_id=?').run(user.id);
+    db.prepare('INSERT INTO password_reset_tokens (user_id,token,expires_at) VALUES (?,?,?)').run(user.id,token,expires);
+    const resetUrl=`${process.env.APP_URL||'https://teamhub.maverickapp.com.au'}/reset-password.html?token=${token}`;
+    sendResetEmail(user.email,user.name,resetUrl);
+  }
+  res.json({ok:true});
+});
+
+app.post('/api/reset-password',(req,res)=>{
+  const {token,password}=req.body;
+  if(!token||!password) return res.status(400).json({error:'Missing fields'});
+  if(password.length<6) return res.status(400).json({error:'Password must be at least 6 characters'});
+  const record=db.prepare('SELECT * FROM password_reset_tokens WHERE token=? AND used=0').get(token);
+  if(!record) return res.status(400).json({error:'Invalid or expired reset link'});
+  if(new Date(record.expires_at+'Z')<new Date()) return res.status(400).json({error:'Reset link has expired. Please request a new one.'});
+  const hash=bcrypt.hashSync(password,10);
+  db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hash,record.user_id);
+  db.prepare('UPDATE password_reset_tokens SET used=1 WHERE id=?').run(record.id);
+  res.json({ok:true});
+});
+
+// ---- MFA ----
+app.get('/api/mfa/status',auth,(req,res)=>{
+  const u=db.prepare('SELECT mfa_enabled FROM users WHERE id=?').get(req.user.id);
+  res.json({mfa_enabled:!!u.mfa_enabled});
+});
+app.get('/api/mfa/setup',auth,async(req,res)=>{
+  const secret=speakeasy.generateSecret({name:`Maverick Hub (${req.user.username})`});
+  db.prepare('UPDATE users SET mfa_secret=?,mfa_enabled=0 WHERE id=?').run(secret.base32,req.user.id);
+  const qr=await QRCode.toDataURL(secret.otpauth_url);
+  res.json({secret:secret.base32,qr});
+});
+app.post('/api/mfa/enable',auth,(req,res)=>{
+  const {code}=req.body;
+  const user=db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+  if(!user.mfa_secret) return res.status(400).json({error:'No MFA setup in progress'});
+  const ok=speakeasy.totp.verify({secret:user.mfa_secret,encoding:'base32',token:String(code).replace(/\s/g,''),window:1});
+  if(!ok) return res.status(400).json({error:'Invalid code – please try again'});
+  db.prepare('UPDATE users SET mfa_enabled=1 WHERE id=?').run(req.user.id);
+  res.json({ok:true});
+});
+app.post('/api/mfa/disable',auth,(req,res)=>{
+  const {password}=req.body;
+  const user=db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+  if(!bcrypt.compareSync(password,user.password_hash)) return res.status(401).json({error:'Incorrect password'});
+  db.prepare('UPDATE users SET mfa_enabled=0,mfa_secret=NULL WHERE id=?').run(req.user.id);
+  res.json({ok:true});
+});
+
 app.post('/api/logout',(req,res)=>{res.clearCookie('token');res.json({ok:true})});
 app.get('/api/me',auth,(req,res)=>{
   res.json(db.prepare('SELECT id,username,name,role,avatar_color FROM users WHERE id=?').get(req.user.id));
@@ -317,7 +421,7 @@ app.get('/api/me',auth,(req,res)=>{
 // ---- USERS ----
 const COLORS=['#F59E0B','#10B981','#3B82F6','#8B5CF6','#EC4899','#EF4444','#06B6D4','#84CC16'];
 app.get('/api/users',auth,(req,res)=>{
-  res.json(db.prepare('SELECT id,username,name,role,avatar_color FROM users ORDER BY name').all());
+  res.json(db.prepare('SELECT id,username,name,role,avatar_color,email,mfa_enabled FROM users ORDER BY name').all());
 });
 app.post('/api/users',auth,adminOnly,(req,res)=>{
   const {username,name,password,role}=req.body;
@@ -330,11 +434,11 @@ app.post('/api/users',auth,adminOnly,(req,res)=>{
   } catch { res.status(400).json({error:'Username already exists'}); }
 });
 app.put('/api/users/:id',auth,adminOnly,(req,res)=>{
-  const {name,username,role}=req.body;
+  const {name,username,role,email}=req.body;
   if (!name||!username) return res.status(400).json({error:'Name and username required'});
   const existing=db.prepare('SELECT id FROM users WHERE username=? AND id!=?').get(username.toLowerCase().trim(),req.params.id);
   if (existing) return res.status(400).json({error:'Username already taken'});
-  db.prepare('UPDATE users SET name=?,username=?,role=? WHERE id=?').run(name.trim(),username.toLowerCase().trim(),role||'member',req.params.id);
+  db.prepare('UPDATE users SET name=?,username=?,role=?,email=? WHERE id=?').run(name.trim(),username.toLowerCase().trim(),role||'member',email?.trim()||null,req.params.id);
   res.json({ok:true});
 });
 app.put('/api/users/:id/password',auth,adminOnly,(req,res)=>{
@@ -441,7 +545,7 @@ app.get('/api/org-chart',auth,(req,res)=>{
     SELECT u.id,u.name,u.role,u.avatar_color,u.reports_to,u.position_id,
       p.name as position_name,p.color as position_color,
       (SELECT COUNT(*) FROM users sub WHERE sub.reports_to=u.id) as direct_reports
-    FROM users u LEFT JOIN positions p ON p.id=u.position_id ORDER BY u.name
+    FROM users u LEFT JOIN positions p ON p.id=u.position_id ORDER BY COALESCE(p.sort_order,999),u.name
   `).all());
 });
 

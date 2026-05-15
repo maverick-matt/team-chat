@@ -377,6 +377,7 @@ textarea.fld{resize:vertical;min-height:80px;line-height:1.5}
   <div class="sb-foot">
     <div class="my-av" id="myAvatar"></div>
     <div class="my-info"><div class="my-name" id="myName"></div><div class="my-status">● Online</div></div>
+    <button class="icon-btn" title="Security settings" onclick="openSecurity()">🔒</button>
     <button class="icon-btn" title="Sign out" onclick="logout()">⏻</button>
   </div>
 </div>
@@ -564,6 +565,19 @@ textarea.fld{resize:vertical;min-height:80px;line-height:1.5}
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('tsEditModal')">Cancel</button>
       <button class="btn btn-amb" onclick="submitTSEdit()">Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- SECURITY MODAL -->
+<div class="overlay" id="securityModal">
+  <div class="modal" style="width:460px">
+    <h2>Security Settings</h2>
+    <div id="secMFASection">
+      <!-- rendered by openSecurity() -->
+    </div>
+    <div class="modal-actions" style="margin-top:18px">
+      <button class="btn btn-ghost" onclick="closeModal('securityModal')">Close</button>
     </div>
   </div>
 </div>
@@ -1508,6 +1522,79 @@ function closeModal(id){document.getElementById(id).classList.remove('show')}
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('show')}));
 let toastTimer;
 function showToast(msg,type='ok'){const t=document.getElementById('toast');t.textContent=(type==='ok'?'✓ ':'✕ ')+msg;t.className='toast '+type;t.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.style.display='none'},3500)}
+
+// ====== SECURITY / MFA ======
+async function openSecurity() {
+  const sec = document.getElementById('secMFASection');
+  sec.innerHTML = '<p style="color:var(--mut);font-size:13px">Loading...</p>';
+  document.getElementById('securityModal').classList.add('show');
+  const r = await fetch('/api/mfa/status');
+  const {mfa_enabled} = await r.json();
+  if (mfa_enabled) {
+    sec.innerHTML = `
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:22px">✅</span>
+        <div><div style="font-weight:600;font-size:14px;color:#166534">Two-Factor Authentication is ON</div>
+        <div style="font-size:12px;color:#4ade80;margin-top:2px">Your account is protected by Google Authenticator</div></div>
+      </div>
+      <p style="font-size:13px;color:var(--mut);margin-bottom:14px">To disable MFA, enter your current password:</p>
+      <input type="password" id="mfaDisablePw" class="fld" placeholder="Current password" style="margin-bottom:10px"/>
+      <button class="btn btn-danger" onclick="disableMFA()" style="width:100%">Disable Two-Factor Authentication</button>`;
+  } else {
+    sec.innerHTML = `
+      <div style="background:#fefce8;border:1px solid #fde68a;border-radius:10px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:22px">⚠️</span>
+        <div><div style="font-weight:600;font-size:14px;color:#92400e">Two-Factor Authentication is OFF</div>
+        <div style="font-size:12px;color:#b45309;margin-top:2px">Enable MFA for extra account security</div></div>
+      </div>
+      <button class="btn btn-amb" onclick="setupMFA()" style="width:100%">Enable Google Authenticator →</button>`;
+  }
+}
+
+async function setupMFA() {
+  const sec = document.getElementById('secMFASection');
+  sec.innerHTML = '<p style="color:var(--mut);font-size:13px">Generating QR code...</p>';
+  const r = await fetch('/api/mfa/setup');
+  const {qr, secret} = await r.json();
+  sec.innerHTML = `
+    <p style="font-size:13px;color:var(--txt);margin-bottom:14px;line-height:1.6">
+      Scan this QR code with <strong>Google Authenticator</strong>, then enter the 6-digit code below to confirm.
+    </p>
+    <div style="text-align:center;margin-bottom:14px">
+      <img src="${qr}" style="width:180px;height:180px;border:1px solid var(--brd);border-radius:8px"/>
+    </div>
+    <details style="margin-bottom:14px;font-size:12px;color:var(--mut)">
+      <summary style="cursor:pointer">Can't scan? Enter manually</summary>
+      <code style="display:block;margin-top:8px;background:var(--bg);padding:8px;border-radius:6px;word-break:break-all;font-size:12px;color:var(--txt)">${esc(secret)}</code>
+    </details>
+    <div class="fld-label">Verification Code</div>
+    <input type="text" id="mfaVerifyCode" class="fld" placeholder="000000" maxlength="6" inputmode="numeric" style="text-align:center;font-size:20px;letter-spacing:8px;font-weight:700;margin-bottom:10px"/>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-ghost" onclick="openSecurity()">Back</button>
+      <button class="btn btn-amb" onclick="confirmEnableMFA()" style="flex:1">Confirm &amp; Enable →</button>
+    </div>`;
+  setTimeout(()=>document.getElementById('mfaVerifyCode')?.focus(),50);
+}
+
+async function confirmEnableMFA() {
+  const code = document.getElementById('mfaVerifyCode')?.value?.replace(/\s/g,'');
+  if (!code||code.length<6){showToast('Enter the 6-digit code','err');return;}
+  const r = await fetch('/api/mfa/enable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+  const d = await r.json();
+  if (!r.ok){showToast(d.error||'Invalid code','err');return;}
+  showToast('MFA enabled — your account is now protected','ok');
+  openSecurity();
+}
+
+async function disableMFA() {
+  const pw = document.getElementById('mfaDisablePw')?.value;
+  if (!pw){showToast('Enter your password','err');return;}
+  const r = await fetch('/api/mfa/disable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+  const d = await r.json();
+  if (!r.ok){showToast(d.error||'Failed','err');return;}
+  showToast('MFA disabled','ok');
+  openSecurity();
+}
 
 init();
 </script>

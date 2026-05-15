@@ -17,10 +17,23 @@
     input{width:100%;border:1px solid #d1d9e8;border-radius:8px;padding:10px 12px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .2s,box-shadow .2s;color:#0D1E35}
     input:focus{border-color:#2B5EA7;box-shadow:0 0 0 3px rgba(43,94,167,.12)}
     input::placeholder{color:#7A96B8}
-    button{width:100%;background:linear-gradient(135deg,#2B5EA7,#1C3B6E);color:#fff;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;border:none;border-radius:10px;padding:12px;cursor:pointer;transition:opacity .2s;margin-top:4px}
-    button:hover{opacity:.9}
-    button:disabled{opacity:.6;cursor:not-allowed}
+    .btn-primary{width:100%;background:linear-gradient(135deg,#2B5EA7,#1C3B6E);color:#fff;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;border:none;border-radius:10px;padding:12px;cursor:pointer;transition:opacity .2s;margin-top:4px}
+    .btn-primary:hover{opacity:.9}
+    .btn-primary:disabled{opacity:.6;cursor:not-allowed}
+    .btn-link{background:none;border:none;color:#2B5EA7;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px;width:auto}
+    .btn-link:hover{opacity:.8}
     .error{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#EF4444;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none}
+    .success{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);color:#059669;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none}
+    .screen{display:none}
+    .screen.active{display:block}
+    .back-row{display:flex;align-items:center;margin-bottom:18px;gap:10px}
+    .back-btn{background:none;border:none;color:#7A96B8;cursor:pointer;font-size:20px;padding:0;line-height:1;width:auto;margin-top:0;transition:color .15s}
+    .back-btn:hover{color:#1C3B6E;opacity:1}
+    .screen-title{font-family:'Syne',sans-serif;font-size:17px;font-weight:700;color:#0D1E35}
+    .screen-sub{font-size:13px;color:#7A96B8;margin-bottom:18px;line-height:1.6}
+    .mfa-input{text-align:center;font-size:26px;font-weight:700;letter-spacing:10px;font-family:'Syne',sans-serif}
+    .forgot-row{text-align:center;margin-top:14px}
+    .mfa-icon{font-size:38px;text-align:center;margin-bottom:10px}
     @media(max-width:480px){
       body{align-items:flex-start;padding:20px 14px}
       .card{padding:28px 20px}
@@ -33,35 +46,128 @@
       <img src="/images/maverick-logo-original.png" alt="Maverick Campers" class="main-logo">
       <img src="/images/team-hub-logo.png" alt="Team Hub" class="sub-logo">
     </div>
-    <div class="error" id="error"></div>
-    <div class="field">
-      <label>Username</label>
-      <input type="text" id="username" placeholder="your.username" autocomplete="username"/>
+
+    <!-- Screen: Login -->
+    <div class="screen active" id="screenLogin">
+      <div class="error" id="loginError"></div>
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="username" placeholder="your.username" autocomplete="username"/>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password"/>
+      </div>
+      <button class="btn-primary" id="loginBtn" onclick="login()">Sign In →</button>
+      <div class="forgot-row">
+        <button class="btn-link" onclick="showScreen('screenForgot')">Forgot your password?</button>
+      </div>
     </div>
-    <div class="field">
-      <label>Password</label>
-      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password"/>
+
+    <!-- Screen: MFA -->
+    <div class="screen" id="screenMFA">
+      <div class="back-row">
+        <button class="back-btn" onclick="showScreen('screenLogin')">←</button>
+        <span class="screen-title">Two-Factor Auth</span>
+      </div>
+      <div class="mfa-icon">🔐</div>
+      <p class="screen-sub">Open Google Authenticator and enter the 6-digit code for Maverick Hub.</p>
+      <div class="error" id="mfaError"></div>
+      <div class="field">
+        <label>Authentication Code</label>
+        <input type="text" id="mfaCode" class="mfa-input" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code"/>
+      </div>
+      <button class="btn-primary" id="mfaBtn" onclick="submitMFA()">Verify →</button>
     </div>
-    <button id="loginBtn" onclick="login()">Sign In →</button>
+
+    <!-- Screen: Forgot Password -->
+    <div class="screen" id="screenForgot">
+      <div class="back-row">
+        <button class="back-btn" onclick="showScreen('screenLogin')">←</button>
+        <span class="screen-title">Reset Password</span>
+      </div>
+      <p class="screen-sub">Enter your username and we'll send a password reset link to your registered email address.</p>
+      <div class="error" id="forgotError"></div>
+      <div class="success" id="forgotSuccess"></div>
+      <div class="field" id="forgotFieldWrap">
+        <label>Username</label>
+        <input type="text" id="forgotUsername" placeholder="your.username" autocomplete="username"/>
+      </div>
+      <button class="btn-primary" id="forgotBtn" onclick="submitForgot()">Send Reset Link →</button>
+    </div>
+
   </div>
   <script>
-    document.addEventListener('keydown',e=>{if(e.key==='Enter')login()});
-    async function login(){
-      const username=document.getElementById('username').value.trim();
-      const password=document.getElementById('password').value;
-      const btn=document.getElementById('loginBtn');
-      const err=document.getElementById('error');
-      if(!username||!password){showErr('Please enter username and password');return}
-      btn.disabled=true;btn.textContent='Signing in...';err.style.display='none';
-      try{
-        const res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
-        const data=await res.json();
-        if(!res.ok){showErr(data.error||'Login failed');return}
-        window.location.href='/app.html';
-      }catch{showErr('Connection error. Please try again.')}
-      finally{btn.disabled=false;btn.textContent='Sign In →'}
+    let mfaTempToken = null;
+
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
     }
-    function showErr(msg){const err=document.getElementById('error');err.textContent=msg;err.style.display='block'}
+
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      const active = document.querySelector('.screen.active')?.id;
+      if (active === 'screenLogin') login();
+      else if (active === 'screenMFA') submitMFA();
+      else if (active === 'screenForgot') submitForgot();
+    });
+
+    async function login() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const btn = document.getElementById('loginBtn');
+      const err = document.getElementById('loginError');
+      if (!username || !password) { showErr(err, 'Please enter username and password'); return; }
+      btn.disabled = true; btn.textContent = 'Signing in...'; err.style.display = 'none';
+      try {
+        const res = await fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username, password})});
+        const data = await res.json();
+        if (!res.ok) { showErr(err, data.error || 'Login failed'); return; }
+        if (data.mfa_required) {
+          mfaTempToken = data.temp_token;
+          showScreen('screenMFA');
+          setTimeout(() => document.getElementById('mfaCode').focus(), 50);
+          return;
+        }
+        window.location.href = '/app.html';
+      } catch { showErr(err, 'Connection error. Please try again.'); }
+      finally { btn.disabled = false; btn.textContent = 'Sign In →'; }
+    }
+
+    async function submitMFA() {
+      const code = document.getElementById('mfaCode').value.replace(/\s/g, '');
+      const btn = document.getElementById('mfaBtn');
+      const err = document.getElementById('mfaError');
+      if (!code || code.length < 6) { showErr(err, 'Please enter the 6-digit code'); return; }
+      btn.disabled = true; btn.textContent = 'Verifying...'; err.style.display = 'none';
+      try {
+        const res = await fetch('/api/login/mfa', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({temp_token: mfaTempToken, code})});
+        const data = await res.json();
+        if (!res.ok) { showErr(err, data.error || 'Verification failed'); return; }
+        window.location.href = '/app.html';
+      } catch { showErr(err, 'Connection error. Please try again.'); }
+      finally { btn.disabled = false; btn.textContent = 'Verify →'; }
+    }
+
+    async function submitForgot() {
+      const username = document.getElementById('forgotUsername').value.trim();
+      const btn = document.getElementById('forgotBtn');
+      const err = document.getElementById('forgotError');
+      const suc = document.getElementById('forgotSuccess');
+      if (!username) { showErr(err, 'Please enter your username'); return; }
+      btn.disabled = true; btn.textContent = 'Sending...'; err.style.display = 'none'; suc.style.display = 'none';
+      try {
+        await fetch('/api/forgot-password', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username})});
+        suc.textContent = 'If your account has an email address on file, a reset link has been sent. Check your inbox.';
+        suc.style.display = 'block';
+        document.getElementById('forgotFieldWrap').style.display = 'none';
+        btn.style.display = 'none';
+      } catch { showErr(err, 'Connection error. Please try again.'); }
+      finally { btn.disabled = false; btn.textContent = 'Send Reset Link →'; }
+    }
+
+    function showErr(el, msg) { el.textContent = msg; el.style.display = 'block'; }
   </script>
 </body>
 </html>
