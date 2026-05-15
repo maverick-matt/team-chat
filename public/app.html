@@ -397,7 +397,7 @@ textarea.fld{resize:vertical;min-height:80px;line-height:1.5}
           </div>
           <div class="gps-row" id="gpsRow">
             <div class="gps-dot pulse" id="gpsDot"></div>
-            <span id="gpsMsg">Acquiring GPS location...</span>
+            <span id="gpsMsg">Getting your location...</span>
           </div>
           <button class="tc-btn in" id="tcBtn" onclick="clockAction()" disabled>Clock In</button>
           <div class="tc-session" id="tcSession" style="display:none">
@@ -696,28 +696,62 @@ function getGPS(){
   if (tcStatus?.clocked_in) return;
   const dot=document.getElementById('gpsDot');
   const msg=document.getElementById('gpsMsg');
-  dot.className='gps-dot pulse';msg.textContent='Acquiring GPS location...';
-  document.getElementById('tcBtn').disabled=true;
+  const btn=document.getElementById('tcBtn');
+  dot.className='gps-dot pulse';msg.textContent='Getting your location...';btn.disabled=true;
   if (!navigator.geolocation){
-    dot.className='gps-dot err';msg.textContent='GPS not available on this device';
-    if (me.role==='admin') document.getElementById('tcBtn').disabled=false;
-    return;
+    gpsError('Location not available in this browser');return;
   }
+  // Step 1: Fast fix — network/IP location, accepts cached up to 60s old (responds in ~1s)
   navigator.geolocation.getCurrentPosition(
     pos=>{
       gpsCoords={lat:pos.coords.latitude,lng:pos.coords.longitude};
-      dot.className='gps-dot ok';
-      msg.textContent=`GPS acquired (±${Math.round(pos.coords.accuracy)}m accuracy)`;
-      document.getElementById('tcBtn').disabled=false;
+      const acc=Math.round(pos.coords.accuracy);
+      dot.className='gps-dot ok';btn.disabled=false;
+      msg.textContent=`Location found ±${acc}m${acc>300?' (refining…)':''}`;
+      // Step 2: Silently refine with high-accuracy GPS if accuracy was poor
+      if (acc>150){
+        navigator.geolocation.getCurrentPosition(
+          pos2=>{
+            if (pos2.coords.accuracy<pos.coords.accuracy){
+              gpsCoords={lat:pos2.coords.latitude,lng:pos2.coords.longitude};
+              msg.textContent=`Location refined ±${Math.round(pos2.coords.accuracy)}m`;
+            }
+          },
+          ()=>{}, // ignore — we already have a usable fix
+          {enableHighAccuracy:true,timeout:10000,maximumAge:0}
+        );
+      }
     },
     err=>{
-      gpsCoords=null;
-      dot.className='gps-dot err';
-      msg.textContent='GPS unavailable: '+err.message;
-      if (me.role==='admin') document.getElementById('tcBtn').disabled=false;
+      // Fast fix failed — try high-accuracy as one more attempt
+      msg.textContent='Trying GPS…';
+      navigator.geolocation.getCurrentPosition(
+        pos=>{
+          gpsCoords={lat:pos.coords.latitude,lng:pos.coords.longitude};
+          dot.className='gps-dot ok';btn.disabled=false;
+          msg.textContent=`Location found ±${Math.round(pos.coords.accuracy)}m`;
+        },
+        err2=>gpsError(gpsErrMsg(err2)),
+        {enableHighAccuracy:true,timeout:8000,maximumAge:30000}
+      );
     },
-    {enableHighAccuracy:true,timeout:15000}
+    {enableHighAccuracy:false,timeout:5000,maximumAge:60000}
   );
+}
+
+function gpsError(message){
+  const dot=document.getElementById('gpsDot');
+  const msg=document.getElementById('gpsMsg');
+  dot.className='gps-dot err';
+  msg.innerHTML=`${message} — <button onclick="getGPS()" style="background:none;border:none;color:var(--amb);text-decoration:underline;cursor:pointer;font-size:12px;padding:0">Retry</button>`;
+  if (me.role==='admin') document.getElementById('tcBtn').disabled=false;
+}
+
+function gpsErrMsg(err){
+  if (err.code===1) return 'Location permission denied — enable it in browser settings';
+  if (err.code===2) return 'Location unavailable — check your connection';
+  if (err.code===3) return 'Location timed out';
+  return 'Location error';
 }
 
 async function clockAction(){
