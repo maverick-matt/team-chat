@@ -390,6 +390,7 @@ textarea.fld{resize:vertical;min-height:80px;line-height:1.5}
         <div class="tc-card">
           <div class="tc-livetime" id="tcTime">--:--:--</div>
           <div class="tc-livedate" id="tcDate"></div>
+          <div id="tcTzLabel" style="font-size:11px;color:var(--mut);margin-top:-16px;margin-bottom:18px;letter-spacing:.5px;text-transform:uppercase"></div>
           <div class="tc-store-sel" id="tcStoreSel">
             <label>Select Location</label>
             <select class="fld fld-select" id="tcStoreId"></select>
@@ -487,7 +488,8 @@ textarea.fld{resize:vertical;min-height:80px;line-height:1.5}
 // ====== STATE ======
 let me=null, socket=null;
 let active=null, channels=[], users=[], onlineIds=new Set(), unread={}, typingTimer=null;
-let myStores=[], tcStatus=null, tcInterval=null, tcElapsedTimer=null, gpsCoords=null;
+let myStores=[], allAdminStores=[], tcStatus=null, tcInterval=null, tcElapsedTimer=null, gpsCoords=null;
+let clockTimezone='Australia/Sydney'; // updated when store is selected
 let schedOffset=0, myShifts=[];
 let kbCats=[], kbAllArticles=[], kbCurCat='', kbSearchVal='';
 let activeForms=[], curFormId=null;
@@ -538,7 +540,9 @@ async function loadDashboard() {
   const storeEl=document.getElementById('dashClockStore');
   if (tcStatus?.clocked_in) {
     statusEl.innerHTML=`<span class="clock-status-badge clocked-in">● Clocked In</span>`;
-    storeEl.textContent='At '+tcStatus.record.store_name+' since '+fmtTime(tcStatus.record.clock_in_at);
+    const tz=tcStatus.record.timezone||'Australia/Sydney';
+    const tzAbbr=new Intl.DateTimeFormat('en-AU',{timeZone:tz,timeZoneName:'short'}).formatToParts(new Date()).find(p=>p.type==='timeZoneName')?.value||'';
+    storeEl.textContent='At '+tcStatus.record.store_name+' since '+fmtTimeInTz(tcStatus.record.clock_in_at,tz)+' '+tzAbbr;
   } else {
     statusEl.innerHTML=`<span class="clock-status-badge clocked-out">⏸ Not clocked in</span>`;
     storeEl.textContent='';
@@ -590,6 +594,8 @@ function getWeekStart(d){const day=d.getDay();const diff=d.getDate()-day+(day===
 function fmtHours(ms){const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);return h+'h'+(m>0?' '+m+'m':'')}
 function fmtDate(ds){return new Date(ds+'T00:00:00').toLocaleDateString('en-AU',{weekday:'short',month:'short',day:'numeric'})}
 function fmtTime(dt){return new Date(dt).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'})}
+function fmtTimeInTz(dt,tz){return new Date(dt).toLocaleTimeString('en-AU',{timeZone:tz||'Australia/Sydney',hour:'2-digit',minute:'2-digit'})}
+function fmtDateInTz(dt,tz){return new Date(dt).toLocaleDateString('en-AU',{timeZone:tz||'Australia/Sydney',weekday:'short',month:'short',day:'numeric'})}
 function fmtDur(ms){const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);const s=Math.floor((ms%60000)/1000);return pad(h)+':'+pad(m)+':'+pad(s)}
 function pad(n){return String(n).padStart(2,'0')}
 
@@ -611,20 +617,42 @@ async function loadTimeclock(){
   await fetchClockStatus();
   const sel=document.getElementById('tcStoreId');
   sel.innerHTML='';
+  let storeList=[];
   if (me.role==='admin') {
-    const all=await fetch('/api/stores').then(r=>r.json());
-    all.forEach(s=>sel.add(new Option(s.name,s.id)));
+    allAdminStores=await fetch('/api/stores').then(r=>r.json());
+    storeList=allAdminStores;
   } else {
-    if (!myStores.length){
-      sel.innerHTML='<option value="">No stores assigned</option>';
-    } else {
-      myStores.forEach(s=>sel.add(new Option(s.name,s.id)));
-    }
+    storeList=myStores;
   }
+  if (!storeList.length){
+    sel.innerHTML='<option value="">No stores assigned</option>';
+  } else {
+    storeList.forEach(s=>sel.add(new Option(s.name,s.id)));
+    // Set timezone from the first store (or active clock-in store)
+    const activeStore=tcStatus?.clocked_in
+      ? storeList.find(s=>s.id===tcStatus.record.store_id)||storeList[0]
+      : storeList[0];
+    if (activeStore?.timezone) setClockTimezone(activeStore.timezone);
+  }
+  // Update timezone when store selector changes
+  sel.onchange=()=>{
+    const sid=parseInt(sel.value);
+    const s=(me.role==='admin'?allAdminStores:myStores).find(x=>x.id===sid);
+    if (s?.timezone) setClockTimezone(s.timezone);
+  };
   updateTCUI();
   getGPS();
   loadTCRecords();
   startElapsedTimer();
+}
+
+function setClockTimezone(tz){
+  clockTimezone=tz;
+  // Show timezone abbreviation
+  const abbr=new Intl.DateTimeFormat('en-AU',{timeZone:tz,timeZoneName:'short'})
+    .formatToParts(new Date()).find(p=>p.type==='timeZoneName')?.value||tz;
+  const lbl=document.getElementById('tcTzLabel');
+  if(lbl) lbl.textContent=abbr+' — store local time';
 }
 
 function updateTCUI(){
@@ -711,12 +739,14 @@ async function loadTCRecords(){
     const el=document.getElementById('tcRecords');
     if (!recs.length){el.innerHTML='<div class="tr-row" style="color:var(--mut)">No time entries yet</div>';return}
     el.innerHTML=recs.map(r=>{
+      const tz=r.timezone||'Australia/Sydney';
       const isActive=!r.clock_out_at;
-      const dur=isActive?'<span class="tr-active">Active</span>':fmtDurShort(r.clock_in_at,r.clock_out_at);
+      const dur=isActive?'<span class="tr-active">● Active</span>':fmtDurShort(r.clock_in_at,r.clock_out_at);
+      const tzAbbr=new Intl.DateTimeFormat('en-AU',{timeZone:tz,timeZoneName:'short'}).formatToParts(new Date()).find(p=>p.type==='timeZoneName')?.value||'';
       return `<div class="tr-row">
         <div class="tr-store">${r.store_name}</div>
-        <div class="tr-date">${fmtDate(r.clock_in_at.slice(0,10))}</div>
-        <div style="font-size:12px;color:var(--mut)">${fmtTime(r.clock_in_at)}${r.clock_out_at?' – '+fmtTime(r.clock_out_at):''}</div>
+        <div class="tr-date">${fmtDateInTz(r.clock_in_at,tz)}</div>
+        <div style="font-size:12px;color:var(--mut)">${fmtTimeInTz(r.clock_in_at,tz)}${r.clock_out_at?' – '+fmtTimeInTz(r.clock_out_at,tz):''} <span style="color:var(--mut);font-size:10px">${tzAbbr}</span></div>
         <div class="tr-dur">${dur}</div>
       </div>`;
     }).join('');
@@ -732,10 +762,11 @@ function fmtDurShort(inn,out){
 function startClockFace(){
   function tick(){
     const now=new Date();
+    const tz=clockTimezone||'Australia/Sydney';
     const el=document.getElementById('tcTime');
-    if (el) el.textContent=now.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+    if(el) el.textContent=now.toLocaleTimeString('en-AU',{timeZone:tz,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
     const de=document.getElementById('tcDate');
-    if (de) de.textContent=now.toLocaleDateString('en-AU',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    if(de) de.textContent=now.toLocaleDateString('en-AU',{timeZone:tz,weekday:'long',month:'long',day:'numeric',year:'numeric'});
   }
   tick();setInterval(tick,1000);
 }

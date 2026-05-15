@@ -149,8 +149,8 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
   <div class="panel" id="panel-stores">
     <div class="card">
       <div class="card-head"><div class="card-title">Store Locations</div><button class="btn btn-amb" onclick="openAddStore()">+ Add Location</button></div>
-      <div class="tbl-wrap"><table><thead><tr><th>Store</th><th>Address</th><th>GPS Coordinates</th><th>Geofence Radius</th><th>Actions</th></tr></thead>
-      <tbody id="storesTable"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody></table></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Store</th><th>Address</th><th>GPS Coordinates</th><th>Radius</th><th>Timezone</th><th>Actions</th></tr></thead>
+      <tbody id="storesTable"><tr class="empty-row"><td colspan="6">Loading...</td></tr></tbody></table></div>
     </div>
   </div>
 
@@ -278,6 +278,16 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
       <div><label>Longitude</label><input type="number" step="any" id="storeLng" placeholder="115.8026"/></div>
     </div>
     <label>Geofence Radius (metres)</label><input type="number" id="storeRadius" value="300" min="50" max="5000"/>
+    <label>Timezone</label>
+    <select id="storeTimezone">
+      <option value="Australia/Perth">Australia/Perth — AWST (UTC+8, WA)</option>
+      <option value="Australia/Darwin">Australia/Darwin — ACST (UTC+9:30, NT)</option>
+      <option value="Australia/Adelaide">Australia/Adelaide — ACST/ACDT (UTC+9:30, SA)</option>
+      <option value="Australia/Brisbane">Australia/Brisbane — AEST (UTC+10, QLD)</option>
+      <option value="Australia/Sydney" selected>Australia/Sydney — AEST/AEDT (UTC+10, NSW)</option>
+      <option value="Australia/Melbourne">Australia/Melbourne — AEST/AEDT (UTC+10, VIC)</option>
+      <option value="Australia/Hobart">Australia/Hobart — AEST/AEDT (UTC+10, TAS)</option>
+    </select>
     <div style="margin-top:10px"><button class="btn btn-blue btn-sm" onclick="useMyLocationForStore()">📍 Use my current GPS location</button></div>
     <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('storeModal')">Cancel</button><button class="btn btn-amb" onclick="saveStore()">Save Location</button></div>
   </div>
@@ -503,17 +513,21 @@ async function loadStores(){
 }
 function renderStores(){
   const tb=document.getElementById('storesTable');
-  if (!stores.length){tb.innerHTML='<tr class="empty-row"><td colspan="5">No locations yet</td></tr>';return}
-  tb.innerHTML=stores.map(s=>`<tr>
-    <td style="font-weight:500">📍 ${esc(s.name)}</td>
-    <td style="color:var(--mut);font-size:12px">${esc(s.address)}</td>
-    <td style="font-size:12px;color:var(--mut)">${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</td>
-    <td>${s.radius}m</td>
-    <td>
-      <button class="btn btn-blue btn-sm" onclick="openEditStore(${s.id})" style="margin-right:4px">Edit</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteStore(${s.id},'${esc(s.name)}')">Delete</button>
-    </td>
-  </tr>`).join('');
+  if (!stores.length){tb.innerHTML='<tr class="empty-row"><td colspan="6">No locations yet</td></tr>';return}
+  tb.innerHTML=stores.map(s=>{
+    const tzAbbr=s.timezone?new Intl.DateTimeFormat('en-AU',{timeZone:s.timezone,timeZoneName:'short'}).formatToParts(new Date()).find(p=>p.type==='timeZoneName')?.value:'—';
+    return `<tr>
+      <td style="font-weight:500">📍 ${esc(s.name)}</td>
+      <td style="color:var(--mut);font-size:12px">${esc(s.address)}</td>
+      <td style="font-size:12px;color:var(--mut)">${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</td>
+      <td>${s.radius}m</td>
+      <td style="font-size:12px"><span style="background:rgba(43,94,167,.1);color:#1C3B6E;border-radius:4px;padding:2px 7px;font-size:11px">${tzAbbr}</span><div style="font-size:10px;color:var(--mut);margin-top:2px">${s.timezone||'—'}</div></td>
+      <td>
+        <button class="btn btn-blue btn-sm" onclick="openEditStore(${s.id})" style="margin-right:4px">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteStore(${s.id},'${esc(s.name)}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
 }
 
 function openAddStore(){
@@ -533,6 +547,7 @@ function openEditStore(id){
   document.getElementById('storeLat').value=s.lat;
   document.getElementById('storeLng').value=s.lng;
   document.getElementById('storeRadius').value=s.radius;
+  document.getElementById('storeTimezone').value=s.timezone||'Australia/Sydney';
   document.getElementById('storeModal').classList.add('show');
 }
 
@@ -551,13 +566,14 @@ async function saveStore(){
   const lat=parseFloat(document.getElementById('storeLat').value);
   const lng=parseFloat(document.getElementById('storeLng').value);
   const radius=parseInt(document.getElementById('storeRadius').value)||300;
+  const timezone=document.getElementById('storeTimezone').value||'Australia/Sydney';
   if (!name||isNaN(lat)||isNaN(lng)){showToast('Name, lat and lng required','err');return}
   if (editingStoreId) {
-    const r=await fetch('/api/stores/'+editingStoreId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,address,lat,lng,radius})});
+    const r=await fetch('/api/stores/'+editingStoreId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,address,lat,lng,radius,timezone})});
     if (r.ok){closeModal('storeModal');showToast('Location updated','ok');await loadStores();}
     else{const d=await r.json();showToast(d.error,'err');}
   } else {
-    const r=await fetch('/api/stores',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,address,lat,lng,radius})});
+    const r=await fetch('/api/stores',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,address,lat,lng,radius,timezone})});
     if (r.ok){closeModal('storeModal');showToast('Location added','ok');await loadStores();}
     else{const d=await r.json();showToast(d.error,'err');}
   }
@@ -599,8 +615,8 @@ function renderTimeRecords(recs){
     return `<tr>
       <td><div style="display:flex;align-items:center;gap:7px"><div class="avatar" style="background:${r.avatar_color};width:24px;height:24px;font-size:9px">${initials(r.user_name)}</div>${esc(r.user_name)}</div></td>
       <td style="font-size:12px">📍 ${esc(r.store_name)}</td>
-      <td style="font-size:12px">${fmtDT(r.clock_in_at)}</td>
-      <td style="font-size:12px">${r.clock_out_at?fmtDT(r.clock_out_at):'<span style="color:var(--grn)">Active</span>'}</td>
+      <td style="font-size:12px">${fmtDT(r.clock_in_at,r.timezone)}</td>
+      <td style="font-size:12px">${r.clock_out_at?fmtDT(r.clock_out_at,r.timezone):'<span style="color:var(--grn)">Active</span>'}</td>
       <td style="font-family:Syne,sans-serif;font-weight:700;color:var(--amb)">${dur}</td>
       <td style="font-size:12px;color:var(--mut)">${esc(r.notes||'')}</td>
       <td>
@@ -658,8 +674,13 @@ function durStr(inn,out){
   const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);
   return h+'h '+(m?m+'m':'');
 }
-function fmtDT(dt){
-  return new Date(dt).toLocaleDateString('en-AU',{day:'numeric',month:'short'})+' '+new Date(dt).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'});
+function fmtDT(dt,tz){
+  const d=new Date(dt);
+  const opts={day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'};
+  if(tz) opts.timeZone=tz;
+  const parts=new Intl.DateTimeFormat('en-AU',{...opts,timeZoneName:'short'}).formatToParts(d);
+  const get=t=>parts.find(p=>p.type===t)?.value||'';
+  return `${get('day')} ${get('month')}, ${get('hour')}:${get('minute')} <span style="font-size:10px;color:var(--mut)">${get('timeZoneName')}</span>`;
 }
 
 // ===== ROSTERS =====

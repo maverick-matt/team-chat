@@ -53,7 +53,8 @@ db.exec(`
     address TEXT DEFAULT '',
     lat REAL NOT NULL,
     lng REAL NOT NULL,
-    radius INTEGER DEFAULT 300
+    radius INTEGER DEFAULT 300,
+    timezone TEXT DEFAULT 'Australia/Sydney'
   );
   CREATE TABLE IF NOT EXISTS user_stores (
     user_id INTEGER NOT NULL,
@@ -146,16 +147,29 @@ if (!db.prepare('SELECT id FROM channels WHERE name = ?').get('general')) {
   db.prepare('INSERT INTO channels (name,description) VALUES (?,?)').run('random','Off-topic chat');
 }
 
+// Migrate existing stores table — add timezone column if missing
+try { db.exec("ALTER TABLE stores ADD COLUMN timezone TEXT DEFAULT 'Australia/Sydney'"); } catch(e) {}
+
 // Seed Maverick Campers store locations
 if (!db.prepare('SELECT id FROM stores LIMIT 1').get()) {
   const stores = [
-    ['Wangara WA','1 Quartz Way, Wangara WA 6065',-31.7932,115.8026,300],
-    ['Prospect SA','142 Main North Rd, Prospect SA 5082',-34.8841,138.5994,300],
-    ['Caboolture QLD','37B Lear Jet Drive, Caboolture QLD 4510',-27.0657,152.9453,300],
-    ['Campbellfield VIC','1920 Hume Highway, Campbellfield VIC 3061',-37.6603,144.9644,300],
+    ['Wangara WA','1 Quartz Way, Wangara WA 6065',-31.7932,115.8026,300,'Australia/Perth'],
+    ['Prospect SA','142 Main North Rd, Prospect SA 5082',-34.8841,138.5994,300,'Australia/Adelaide'],
+    ['Caboolture QLD','37B Lear Jet Drive, Caboolture QLD 4510',-27.0657,152.9453,300,'Australia/Brisbane'],
+    ['Campbellfield VIC','1920 Hume Highway, Campbellfield VIC 3061',-37.6603,144.9644,300,'Australia/Melbourne'],
   ];
-  stores.forEach(([name,address,lat,lng,radius]) =>
-    db.prepare('INSERT INTO stores (name,address,lat,lng,radius) VALUES (?,?,?,?,?)').run(name,address,lat,lng,radius));
+  stores.forEach(([name,address,lat,lng,radius,timezone]) =>
+    db.prepare('INSERT INTO stores (name,address,lat,lng,radius,timezone) VALUES (?,?,?,?,?,?)').run(name,address,lat,lng,radius,timezone));
+} else {
+  // Ensure existing stores have the correct timezones
+  const tzMap = {
+    'Wangara WA':'Australia/Perth',
+    'Prospect SA':'Australia/Adelaide',
+    'Caboolture QLD':'Australia/Brisbane',
+    'Campbellfield VIC':'Australia/Melbourne',
+  };
+  Object.entries(tzMap).forEach(([name,tz]) =>
+    db.prepare("UPDATE stores SET timezone=? WHERE name=? AND (timezone IS NULL OR timezone='Australia/Sydney')").run(tz,name));
 }
 
 // Seed KB categories
@@ -247,14 +261,14 @@ app.get('/api/stores',auth,(req,res)=>{
   res.json(db.prepare('SELECT * FROM stores ORDER BY name').all());
 });
 app.post('/api/stores',auth,adminOnly,(req,res)=>{
-  const {name,address,lat,lng,radius}=req.body;
+  const {name,address,lat,lng,radius,timezone}=req.body;
   if (!name||lat==null||lng==null) return res.status(400).json({error:'Missing fields'});
-  const r=db.prepare('INSERT INTO stores (name,address,lat,lng,radius) VALUES (?,?,?,?,?)').run(name,address||'',lat,lng,radius||300);
-  res.json({id:r.lastInsertRowid,name,address,lat,lng,radius:radius||300});
+  const r=db.prepare('INSERT INTO stores (name,address,lat,lng,radius,timezone) VALUES (?,?,?,?,?,?)').run(name,address||'',lat,lng,radius||300,timezone||'Australia/Sydney');
+  res.json({id:r.lastInsertRowid,name,address,lat,lng,radius:radius||300,timezone:timezone||'Australia/Sydney'});
 });
 app.put('/api/stores/:id',auth,adminOnly,(req,res)=>{
-  const {name,address,lat,lng,radius}=req.body;
-  db.prepare('UPDATE stores SET name=?,address=?,lat=?,lng=?,radius=? WHERE id=?').run(name,address||'',lat,lng,radius||300,req.params.id);
+  const {name,address,lat,lng,radius,timezone}=req.body;
+  db.prepare('UPDATE stores SET name=?,address=?,lat=?,lng=?,radius=?,timezone=? WHERE id=?').run(name,address||'',lat,lng,radius||300,timezone||'Australia/Sydney',req.params.id);
   res.json({ok:true});
 });
 app.delete('/api/stores/:id',auth,adminOnly,(req,res)=>{
@@ -265,7 +279,7 @@ app.delete('/api/stores/:id',auth,adminOnly,(req,res)=>{
 
 // ---- CLOCK ----
 app.get('/api/clock/status',auth,(req,res)=>{
-  const rec=db.prepare('SELECT cr.*,s.name as store_name FROM clock_records cr JOIN stores s ON s.id=cr.store_id WHERE cr.user_id=? AND cr.clock_out_at IS NULL ORDER BY cr.clock_in_at DESC LIMIT 1').get(req.user.id);
+  const rec=db.prepare('SELECT cr.*,s.name as store_name,s.timezone FROM clock_records cr JOIN stores s ON s.id=cr.store_id WHERE cr.user_id=? AND cr.clock_out_at IS NULL ORDER BY cr.clock_in_at DESC LIMIT 1').get(req.user.id);
   res.json({clocked_in:!!rec,record:rec||null});
 });
 app.post('/api/clock/in',auth,(req,res)=>{
@@ -294,10 +308,10 @@ app.post('/api/clock/out',auth,(req,res)=>{
 });
 app.get('/api/clock/records',auth,(req,res)=>{
   const uid=req.query.user_id&&req.user.role==='admin'?parseInt(req.query.user_id):req.user.id;
-  res.json(db.prepare('SELECT cr.*,s.name as store_name,u.name as user_name FROM clock_records cr JOIN stores s ON s.id=cr.store_id JOIN users u ON u.id=cr.user_id WHERE cr.user_id=? ORDER BY cr.clock_in_at DESC LIMIT 50').all(uid));
+  res.json(db.prepare('SELECT cr.*,s.name as store_name,s.timezone,u.name as user_name FROM clock_records cr JOIN stores s ON s.id=cr.store_id JOIN users u ON u.id=cr.user_id WHERE cr.user_id=? ORDER BY cr.clock_in_at DESC LIMIT 50').all(uid));
 });
 app.get('/api/clock/all',auth,adminOnly,(req,res)=>{
-  res.json(db.prepare('SELECT cr.*,s.name as store_name,u.name as user_name,u.avatar_color FROM clock_records cr JOIN stores s ON s.id=cr.store_id JOIN users u ON u.id=cr.user_id ORDER BY cr.clock_in_at DESC LIMIT 300').all());
+  res.json(db.prepare('SELECT cr.*,s.name as store_name,s.timezone,u.name as user_name,u.avatar_color FROM clock_records cr JOIN stores s ON s.id=cr.store_id JOIN users u ON u.id=cr.user_id ORDER BY cr.clock_in_at DESC LIMIT 300').all());
 });
 app.put('/api/clock/records/:id',auth,adminOnly,(req,res)=>{
   const {clock_in_at,clock_out_at,notes}=req.body;
