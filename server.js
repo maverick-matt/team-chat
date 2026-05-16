@@ -179,6 +179,31 @@ db.exec(`
     read_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(article_id, user_id)
   );
+  CREATE TABLE IF NOT EXISTS competitors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    website TEXT,
+    description TEXT,
+    sort_order INTEGER DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS competitor_models (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    competitor_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT,
+    price_from TEXT,
+    solar_watts INTEGER,
+    battery_ah INTEGER,
+    battery_type TEXT,
+    bms TEXT,
+    water_tank_l INTEGER,
+    length_ft REAL,
+    tare_kg INTEGER,
+    atm_kg INTEGER,
+    key_features TEXT,
+    comparable_maverick TEXT,
+    notes TEXT
+  );
 `);
 
 // Seed admin user
@@ -405,7 +430,7 @@ app.post('/api/mfa/enable',auth,(req,res)=>{
   db.prepare('UPDATE users SET mfa_enabled=1 WHERE id=?').run(req.user.id);
   res.json({ok:true});
 });
-app.post('/api/mfa/disable',auth,(req,res)=>{
+app.post('/api/mfa/disable',auth,adminOnly,(req,res)=>{
   const {password}=req.body;
   const user=db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
   if(!bcrypt.compareSync(password,user.password_hash)) return res.status(401).json({error:'Incorrect password'});
@@ -1076,5 +1101,145 @@ io.on('connection',(socket)=>{
   });
   socket.on('disconnect',()=>{onlineUsers.delete(socket.user.id);io.emit('online_users',Array.from(onlineUsers.keys()));});
 });
+
+// ---- COMPETITOR RESEARCH ----
+const Anthropic = process.env.ANTHROPIC_API_KEY ? new (require('@anthropic-ai/sdk'))() : null;
+
+app.get('/api/competitors', auth, (req,res) => {
+  const competitors = db.prepare('SELECT * FROM competitors ORDER BY sort_order,name').all();
+  competitors.forEach(c => {
+    c.models = db.prepare('SELECT * FROM competitor_models WHERE competitor_id=? ORDER BY name').all(c.id);
+    c.models.forEach(m => { try { m.key_features = JSON.parse(m.key_features||'[]'); } catch { m.key_features=[]; } });
+  });
+  res.json(competitors);
+});
+
+app.get('/api/competitors/:id/models', auth, (req,res) => {
+  const models = db.prepare('SELECT * FROM competitor_models WHERE competitor_id=? ORDER BY name').all(req.params.id);
+  models.forEach(m => { try { m.key_features = JSON.parse(m.key_features||'[]'); } catch { m.key_features=[]; } });
+  res.json(models);
+});
+
+app.post('/api/competitors/ai-query', auth, async (req,res) => {
+  const {question} = req.body;
+  if (!question) return res.status(400).json({error:'No question provided'});
+  if (!Anthropic) return res.status(503).json({error:'AI not configured — add ANTHROPIC_API_KEY to .env'});
+
+  const competitors = db.prepare('SELECT * FROM competitors ORDER BY sort_order,name').all();
+  competitors.forEach(c => {
+    c.models = db.prepare('SELECT * FROM competitor_models WHERE competitor_id=?').all(c.id);
+    c.models.forEach(m => { try { m.key_features = JSON.parse(m.key_features||'[]'); } catch { m.key_features=[]; } });
+  });
+
+  const competitorContext = competitors.map(c =>
+    `## ${c.name} (${c.website})\n${c.description}\n\nModels:\n` +
+    c.models.map(m =>
+      `- **${m.name}** (${m.category})\n` +
+      `  Price: ${m.price_from||'N/A'} | Solar: ${m.solar_watts ? m.solar_watts+'W' : 'N/A'} | Battery: ${m.battery_ah ? m.battery_ah+'Ah '+m.battery_type : 'N/A'} | BMS: ${m.bms||'N/A'}\n` +
+      `  Water: ${m.water_tank_l ? m.water_tank_l+'L' : 'N/A'} | Length: ${m.length_ft ? m.length_ft+"ft" : 'N/A'} | Tare: ${m.tare_kg ? m.tare_kg+'kg' : 'N/A'} | ATM: ${m.atm_kg ? m.atm_kg+'kg' : 'N/A'}\n` +
+      `  Features: ${m.key_features.join(', ')||'N/A'}`
+    ).join('\n')
+  ).join('\n\n');
+
+  const maverickContext = `## Maverick Campers — Our Products
+**Falcon Range (Off-Road Caravans):** Flagship range with full composite construction, Al-Ko or Cruisemaster independent suspension, 265/75R16 tyres with Timken bearings.
+- Falcon 17DL (top seller): 1 x 400Ah Lithium Battery, 600W+ Renogy solar, Arana instant hot water, 160–200L fresh water, 3000W inverter, reverse cycle A/C, diesel heater, electric bed lift, slide-out kitchen
+- Falcon 21DL: Largest model, full dual-living, premium spec throughout
+- Falcon 196: 19.6ft, maximum off-grid living space
+- Falcon 17C, 16HL, 156C, 146C: Ranging from entry-level to full touring spec
+
+**Viper Range (Hybrid Caravans):** Pop-up roof for full standing height at camp, lighter towing profile
+- Viper 16DL Platinum Hybrid (most popular): full ensuite, queen bed, separate dining and lounge
+- Viper 16C, Viper 13DL, Viper 13: Range from compact to full-size hybrid
+
+**Cobra Range (Hard Lid Hybrids):** Hard lid pop-top (HL) — rigid composite lid, more durable than canvas
+- Cobra 16HL, Cobra 146HL
+
+**Storm Range (Compact Caravans):** Entry-level accessible price point
+- Storm 12 Pop Top, Storm 9 Compact
+
+**Key Maverick Advantages:** 3-year structural warranty, composite construction (no rot/rust), Timken wheel bearings, Renogy solar systems, Australian-made quality`;
+
+  try {
+    const response = await Anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      system: `You are a knowledgeable Maverick Campers sales assistant helping staff answer questions about competitor products and how Maverick Campers compares. Be factual, concise, and helpful. Always present Maverick Campers in a positive light where accurate. When specs are unknown, say so rather than guessing.
+
+Current competitor data:
+${competitorContext}
+
+${maverickContext}`,
+      messages: [{ role: 'user', content: question }]
+    });
+    res.json({ answer: response.content[0].text });
+  } catch(e) {
+    res.status(500).json({ error: 'AI query failed: ' + e.message });
+  }
+});
+
+// ---- COMPETITOR DATA SEED ----
+if (!db.prepare('SELECT id FROM competitors LIMIT 1').get()) {
+  const insertComp = db.prepare('INSERT INTO competitors (name,website,description,sort_order) VALUES (?,?,?,?)');
+  const insertModel = db.prepare('INSERT INTO competitor_models (competitor_id,name,category,price_from,solar_watts,battery_ah,battery_type,bms,water_tank_l,length_ft,tare_kg,atm_kg,key_features,comparable_maverick) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+
+  const seedData = [
+    { name:'MDC Caravans', website:'https://mdccaravans.com.au', description:'Market Direct Campers (MDC) is one of Australia\'s largest off-road caravan and camper trailer brands. Known for aggressive off-grid power systems and heavy-duty construction at competitive price points.', sort:1, models:[
+      { name:'XT17HRT+ MKIII Family', cat:'Off-Road Hybrid Caravan', price:'$89,990', solar:875, bat:600, batType:'Lithium', bms:'Yes', water:160, len:17, tare:2810, atm:3500, features:['2000W auto-transfer inverter','150L Thetford fridge/freezer','Front-load washing machine','Reverse cycle A/C + diesel heating','External slide-out kitchen','80L grey water tank'], mav:'Falcon 17DL' },
+      { name:'XT19HRT MKIII', cat:'Off-Road Hybrid Caravan', price:'$99,990', solar:1225, bat:600, batType:'Lithium', bms:'Yes', water:160, len:19, tare:2940, atm:3500, features:['3000W inverter','175L fridge/freezer','Induction + gas cooktop','Front-load washing machine','External slide-out kitchen + internal kitchenette'], mav:'Falcon 196' },
+      { name:'XT16HR Island MKIII', cat:'Off-Road Hybrid Caravan', price:'$84,990', solar:700, bat:600, batType:'Lithium', bms:'Yes', water:160, len:16, tare:null, atm:null, features:['2000W inverter','Separate ensuite','Twin 80L fresh water tanks','3-berth layout'], mav:'Viper 16DL' },
+    ]},
+    { name:'Austrack Campers', website:'https://austrackcampers.com.au', description:'Queensland-based manufacturer specialising in hybrid off-road campers with market-leading solar and lithium capacity. Sold through major retailers including Anaconda.', sort:2, models:[
+      { name:'Tanami X15 Series 3', cat:'Off-Road Hybrid Camper', price:null, solar:900, bat:690, batType:'LiFePO4 Lithium', bms:'Yes — Renogy REGO with touchscreen + Bluetooth', water:240, len:15, tare:2350, atm:3000, features:['3000W inverter','150A AC mains charger','60A DC-DC + MPPT solar','Can run A/C off-grid','Twin 120L fresh water tanks','80L grey water tank','Independent trailing arm suspension'], mav:'Falcon 17DL' },
+      { name:'Tanami X13 Hybrid', cat:'Off-Road Hybrid Camper', price:null, solar:300, bat:300, batType:'AGM (Lithium option available)', bms:'Yes', water:240, len:13, tare:2090, atm:2750, features:['Twin 120L fresh water tanks','80L grey water tank','Independent trailing arm suspension','Lithium upgrade available'], mav:'Viper 13' },
+    ]},
+    { name:'Ezytrail Campers', website:'https://ezytrail.com.au', description:'Victorian manufacturer offering a broad range from budget forward-fold camper trailers through to full hybrid caravans. Known for Victron electrical systems with Bluetooth monitoring.', sort:3, models:[
+      { name:'Stirling GT MK3', cat:'Forward Fold Hard Floor Camper', price:null, solar:null, bat:200, batType:'AGM Deep Cycle — Victron BMS', bms:'Yes — Victron with Bluetooth', water:165, len:18.5, tare:1757, atm:2250, features:['Victron off-grid system','Bluetooth battery monitoring','120L rear + 45L front stainless tanks','Travel height 1.9m'], mav:'Falcon 146C' },
+      { name:'Parkes 15 Quad MK4', cat:'Off-Road Hybrid Caravan', price:null, solar:1190, bat:null, batType:'Lithium', bms:'Yes', water:240, len:15, tare:2330, atm:2900, features:['1190W solar standard','Twin 120L fresh water tanks','75L grey water tank','Family quad layout','Pop-top hybrid design'], mav:'Viper 16DL' },
+      { name:'VZ5400 HR Premium Hard Top', cat:'Luxury Hard Top Hybrid Caravan', price:null, solar:1190, bat:null, batType:'Lithium 12kWh bank', bms:'Yes', water:null, len:null, tare:2560, atm:null, features:['12kWh lithium bank','1190W solar','Full ensuite','Flagship model'], mav:'Falcon 21DL' },
+    ]},
+    { name:'Stoney Creek Campers', website:'https://stoneycreekcampers.com.au', description:'Australian manufacturer known for Scout off-road caravans and SC-FF camper trailers. 2025 Gen 3 launch with composite FRP foam-sandwich panels. Offer Airbagman air suspension as standard.', sort:4, models:[
+      { name:'Scout-17 Gen3 Off-Road', cat:'Off-Road Caravan', price:'$64,990', solar:600, bat:null, batType:'Lithium', bms:'Yes', water:null, len:17, tare:2791, atm:null, features:['Gen 3 composite FRP foam-sandwich panels','Airbagman air suspension — adjustable','Separate ensuite','Independent trailing arm suspension'], mav:'Falcon 17DL' },
+      { name:'Scout-19 Off-Road', cat:'Off-Road Caravan', price:'$78,000', solar:null, bat:null, batType:'Lithium', bms:'Yes', water:null, len:19, tare:null, atm:null, features:['Gen 3 composite construction','Airbagman air suspension','Full ensuite','Luxury off-road specification'], mav:'Falcon 196' },
+      { name:'SC-FF6 Camper Trailer', cat:'Off-Road Forward Fold Camper', price:null, solar:null, bat:200, batType:'AGM (2 x 100Ah)', bms:'Yes', water:140, len:null, tare:1700, atm:2200, features:['Sleeps 6','Heavy-duty independent suspension','200kg ball weight','Solar-ready (panels optional)','5400mm body length'], mav:'Falcon 146C' },
+    ]},
+    { name:'Jawa Caravans', website:'https://jawacampers.com.au', description:'Brisbane-based manufacturer. Multiple award winners including Caravan Trailer of the Year. Known for Victron/Enerdrive electrical systems, Lovells suspension, and 5-year structural warranty.', sort:5, models:[
+      { name:'Infinity 15', cat:'Off-Road Hybrid Caravan', price:null, solar:600, bat:460, batType:'Lithium', bms:'Yes — Victron', water:240, len:15, tare:2470, atm:2990, features:['3000W Victron inverter','Folds to 18ft when set up','King bed + built-in bunks','Instantaneous hot water','270° batwing awning','Electric roof actuators','A/C + 24" smart TV','Twin 120L tanks + 80L grey'], mav:'Falcon 17DL' },
+      { name:'Sirocco Grande', cat:'Off-Road Hybrid Pop-Top', price:'$76,000', solar:600, bat:400, batType:'Lithium', bms:'Yes — Enerdrive', water:240, len:15, tare:2430, atm:2990, features:['Enerdrive charging system','Electric pop-top roof','Caravan World Hybrid of the Year 2020','Full ensuite','A/C included in tare','Twin 120L tanks + 80L grey'], mav:'Viper 16DL' },
+      { name:'Stealth 16', cat:'Off-Road Pop-Top Hybrid', price:null, solar:600, bat:400, batType:'Lithium — 2x200Ah Enerdrive', bms:'Yes — Enerdrive', water:240, len:16, tare:null, atm:null, features:['Eberspacher diesel heater','Webasto reverse cycle A/C','95L dual-zone fridge','Electric roof actuators','Lovells suspension','King bed + ensuite','Twin 120L tanks + 80L grey'], mav:'Falcon 17C' },
+    ]},
+    { name:'Eagle Camper Trailers', website:'https://eaglecampertrailers.com.au', description:'Australian-owned off-road caravan and camper trailer brand with showrooms in Adelaide, Perth, and Victoria. Warrior range is their flagship off-road hybrid line.', sort:6, models:[
+      { name:'Warrior 15 Off-Road Hybrid', cat:'Off-Road Hybrid Caravan', price:null, solar:300, bat:300, batType:'AGM (3 x 100Ah)', bms:'Yes', water:120, len:15, tare:2340, atm:2900, features:['Heavy-duty independent suspension','McHitch off-road coupling','Al checker plate body','Gas/electric hot water','265/75R16 off-road tyres','16" alloy wheels','85L + 35L fresh water'], mav:'Viper 16DL' },
+      { name:'Warrior 13 Off-Road Hybrid', cat:'Off-Road Hybrid Caravan', price:'$61,990', solar:300, bat:300, batType:'AGM (3 x 100Ah)', bms:'Yes', water:null, len:13, tare:null, atm:null, features:['Heavy-duty independent suspension','McHitch off-road coupling','Gas/electric hot water','Off-road tyres','Compact 13ft design'], mav:'Viper 13' },
+    ]},
+    { name:'Signature Camper Trailers', website:'https://signaturecampertrailers.com.au', description:'100% Australian-owned brand founded 2019, one of Australia\'s fastest-growing camper brands. 4-state showroom network. Uses REDARC and Enerdrive systems. 5-year structural warranty.', sort:7, models:[
+      { name:'Iridium 15 GEN II Hybrid', cat:'Off-Road Hybrid Camper', price:null, solar:540, bat:200, batType:'Lithium — Enerdrive B-TEC', bms:'Yes — Enerdrive/REDARC', water:200, len:15, tare:2260, atm:2850, features:['3x180W REDARC solar panels','Webasto reverse cycle A/C','Hot-dip galvanised chassis','McHitch Uniglide 360° coupling','Independent off-road suspension','5-year structural warranty'], mav:'Viper 16C' },
+      { name:'Marlu Hybrid', cat:'Off-Road Hybrid Caravan', price:null, solar:720, bat:200, batType:'Lithium — Enerdrive B-TEC Gen2 (upgradeable to 600Ah)', bms:'Yes — Enerdrive/REDARC', water:240, len:null, tare:2300, atm:3000, features:['4x180W REDARC monocrystalline solar','200Ah Enerdrive Gen2 (up to 600Ah optional)','Rapid setup and packdown','5-year structural warranty'], mav:'Viper 16DL' },
+    ]},
+    { name:'Mars Campers', website:'https://marscampers.com.au', description:"Victoria-based manufacturer known as 'Australia's best-value hybrid caravans'. Pop-top hybrid range from 11ft to 22ft. Uses Projecta battery management systems with strong standard inclusions at competitive prices.", sort:8, models:[
+      { name:'Mars 15 Premium MKII', cat:'Pop-Top Hybrid Caravan', price:'$60,000', solar:600, bat:400, batType:'Lithium — 2x200Ah', bms:'Yes — Projecta PM400', water:240, len:15, tare:null, atm:3000, features:['Projecta PM400 power management','2000W Enerdrive inverter','30A mains charger','King size inner spring bed','External + internal kitchen','4.5m awning with walls + floor','Twin 120L tanks + 75L grey'], mav:'Viper 16DL' },
+      { name:'Venus 17HR Off-Road', cat:'Off-Road Hard Top Hybrid', price:'$71,999', solar:600, bat:null, batType:'Projecta PM435 BMS', bms:'Yes — Projecta PM435', water:240, len:17, tare:2600, atm:3050, features:['Projecta PM435 BMS','Twin 120L fresh water tanks','Full hard-top off-road construction','Independent suspension'], mav:'Falcon 17DL' },
+    ]},
+    { name:'Arctic Campers', website:'https://arcticcampers.com.au', description:'Australian off-road hybrid caravan brand. Frost 13, Glacier 14 and 16 range of pop-top and hard-top hybrid caravans. Projecta PM400/PM435 power management standard across range.', sort:9, models:[
+      { name:'Frost 13 Off-Road Hybrid', cat:'Off-Road Hybrid Caravan', price:'$56,990', solar:400, bat:270, batType:'LiFePO4 — 2x135Ah', bms:'Yes — Projecta PM400 with Bluetooth', water:240, len:13, tare:2100, atm:2990, features:['Projecta PM400 Bluetooth control','2000W inverter','Truma 14L hot water','Twin 120L tanks + 75L grey','12-inch electric brakes'], mav:'Viper 13' },
+      { name:'Glacier 14 (2026)', cat:'Off-Road Hybrid Caravan', price:null, solar:400, bat:270, batType:'Lithium — Projecta PM400', bms:'Yes — Projecta PM400', water:240, len:14, tare:null, atm:null, features:['Truma Ultra Rapid 14L hot water','Twin 120L tanks + 75L grey','Independent suspension'], mav:'Viper 16C' },
+      { name:'Glacier 16 Double Bunk', cat:'Off-Road Hybrid Caravan — Family', price:'$56,990', solar:600, bat:400, batType:'Lithium', bms:'Yes', water:240, len:16, tare:2490, atm:2990, features:['Double bunk family layout','600W solar + 400Ah lithium','External galley kitchen','Internal combo ensuite','16-inch mud tyres','Independent suspension'], mav:'Viper 16DL' },
+    ]},
+    { name:'Union RV', website:'https://unionrv.com.au', description:'Australian hybrid caravan brand offering pop-top and hard-top models. Uses Renogy solar and inverter systems with lithium batteries across range. Models cater to couples and families, with upgrade paths available.', sort:10, models:[
+      { name:'Venture 15S Pop-Top Hybrid', cat:'Pop-Top Hybrid Caravan', price:null, solar:600, bat:270, batType:'Lithium — 2x135Ah (upgradeable to 405Ah)', bms:'Yes — Renogy', water:null, len:15, tare:2300, atm:3000, features:['Renogy 2000W inverter','Side pop-out + electric pop-top','Upgradeable to 405Ah','220kg tow ball weight','Couple-focused layout'], mav:'Viper 16C' },
+      { name:'Tourer 16HT Hard-Top Hybrid', cat:'Hard-Top Hybrid Caravan', price:null, solar:600, bat:270, batType:'Lithium — 2x135Ah', bms:'Yes — Renogy', water:200, len:16, tare:2360, atm:3000, features:['Renogy 2000W inverter','Full ensuite + separate shower','Plumbed toilet','Washing machine','Hard-top off-road construction','228kg tow ball weight'], mav:'Falcon 17C' },
+      { name:'Tourer 18HT3 Hard-Top Family', cat:'Hard-Top Hybrid Caravan — Family', price:null, solar:800, bat:270, batType:'Lithium — 2x135Ah', bms:'Yes — Renogy', water:200, len:18, tare:null, atm:null, features:['Renogy 2000W inverter','800W solar','Reverse cycle heating/cooling','175L fridge/freezer','Triple bunk family layout','Full ensuite'], mav:'Falcon 196' },
+    ]},
+  ];
+
+  const seedTx = db.transaction(() => {
+    seedData.forEach(c => {
+      const comp = insertComp.run(c.name, c.website, c.description, c.sort);
+      c.models.forEach(m => insertModel.run(comp.lastInsertRowid, m.name, m.cat, m.price||null, m.solar||null, m.bat||null, m.batType||null, m.bms||null, m.water||null, m.len||null, m.tare||null, m.atm||null, JSON.stringify(m.features), m.mav||null));
+    });
+  });
+  seedTx();
+  console.log('Competitor data seeded');
+}
 
 httpServer.listen(PORT,'0.0.0.0',()=>console.log('Maverick Hub running on port '+PORT));
