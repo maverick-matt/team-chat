@@ -374,8 +374,8 @@ app.post('/api/login',(req,res)=>{
     const tempToken=jwt.sign({id:user.id,mfa_pending:true},JWT_SECRET,{expiresIn:'5m'});
     return res.json({mfa_required:true,temp_token:tempToken});
   }
-  const token=jwt.sign({id:user.id,username:user.username,name:user.name,role:user.role},JWT_SECRET,{expiresIn:'7d'});
-  res.cookie('token',token,{httpOnly:true,maxAge:7*24*60*60*1000});
+  const token=jwt.sign({id:user.id,username:user.username,name:user.name,role:user.role},JWT_SECRET,{expiresIn:'30d'});
+  res.cookie('token',token,{httpOnly:true,maxAge:30*24*60*60*1000});
   res.json({id:user.id,username:user.username,name:user.name,role:user.role,avatar_color:user.avatar_color});
 });
 
@@ -388,8 +388,8 @@ app.post('/api/login/mfa',(req,res)=>{
   if(!user||!user.mfa_enabled||!user.mfa_secret) return res.status(401).json({error:'MFA not configured'});
   const ok=speakeasy.totp.verify({secret:user.mfa_secret,encoding:'base32',token:String(code).replace(/\s/g,''),window:1});
   if(!ok) return res.status(401).json({error:'Invalid authentication code'});
-  const token=jwt.sign({id:user.id,username:user.username,name:user.name,role:user.role},JWT_SECRET,{expiresIn:'7d'});
-  res.cookie('token',token,{httpOnly:true,maxAge:7*24*60*60*1000});
+  const token=jwt.sign({id:user.id,username:user.username,name:user.name,role:user.role},JWT_SECRET,{expiresIn:'30d'});
+  res.cookie('token',token,{httpOnly:true,maxAge:30*24*60*60*1000});
   res.json({id:user.id,username:user.username,name:user.name,role:user.role,avatar_color:user.avatar_color});
 });
 
