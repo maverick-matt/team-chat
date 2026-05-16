@@ -501,10 +501,18 @@ textarea.fld{resize:vertical;min-height:80px;line-height:1.5}
     <div class="ph"><span class="ph-icon">🔍</span><span class="ph-title">Competitor Research</span></div>
     <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;background:var(--bg)">
 
+      <!-- Disclaimer -->
+      <div style="padding:8px 16px;background:#fffbeb;border-bottom:1px solid #fde68a;flex-shrink:0;display:flex;align-items:center;gap:8px">
+        <span style="font-size:15px">⚠️</span>
+        <span style="font-size:12px;color:#92400e"><strong>Handy guide only</strong> — competitor specs are researched from public sources and may contain errors or be out of date. Always verify with the manufacturer before quoting to a customer.</span>
+      </div>
+      <!-- Last updated banner -->
+      <div id="crLastUpdatedBanner" style="padding:6px 16px;background:#f8fafc;border-bottom:1px solid var(--brd);flex-shrink:0"></div>
+
       <!-- Tab bar -->
       <div style="display:flex;gap:0;border-bottom:2px solid var(--brd);background:#fff;flex-shrink:0;overflow-x:auto">
         <button class="cr-tab active" onclick="crTab('brands')" data-tab="brands" style="padding:11px 18px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;color:var(--amb);border-bottom:2px solid var(--amb);margin-bottom:-2px;white-space:nowrap">🏢 All Brands</button>
-        <button class="cr-tab" onclick="crTab('compare')" data-tab="compare" style="padding:11px 18px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;color:var(--mut);white-space:nowrap">⚖️ Compare</button>
+        <button class="cr-tab" onclick="crTab('compare')" data-tab="compare" style="padding:11px 18px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;color:var(--mut);white-space:nowrap">⚖️ Compare Models</button>
         <button class="cr-tab" onclick="crTab('ai')" data-tab="ai" style="padding:11px 18px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;color:var(--mut);white-space:nowrap">🤖 AI Assistant</button>
       </div>
 
@@ -516,41 +524,56 @@ textarea.fld{resize:vertical;min-height:80px;line-height:1.5}
 
       <!-- COMPARE TAB -->
       <div id="cr-compare" style="flex:1;overflow:auto;padding:20px;display:none">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;max-width:720px">
-          <div>
-            <div style="font-size:11px;font-weight:700;color:var(--mut2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Maverick Model</div>
-            <select id="crMavSelect" onchange="renderComparison()" style="width:100%;padding:9px 12px;border:1px solid var(--brd);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;background:#fff;color:var(--txt)">
-              <option value="">Select Maverick model…</option>
-              <optgroup label="Falcon Range">
-                <option value="Falcon 17DL">Falcon 17DL (Top Seller)</option>
-                <option value="Falcon 21DL">Falcon 21DL</option>
-                <option value="Falcon 196">Falcon 196</option>
-                <option value="Falcon 17C">Falcon 17C</option>
-                <option value="Falcon 16HL">Falcon 16HL</option>
-                <option value="Falcon 156C">Falcon 156C</option>
-                <option value="Falcon 146C">Falcon 146C</option>
-              </optgroup>
-              <optgroup label="Viper Range">
-                <option value="Viper 16DL">Viper 16DL Platinum Hybrid</option>
-                <option value="Viper 16C">Viper 16C Platinum Hybrid</option>
-                <option value="Viper 13DL">Viper 13DL Platinum Hybrid</option>
-                <option value="Viper 13">Viper 13 Platinum Hybrid</option>
-              </optgroup>
-              <optgroup label="Cobra Range">
-                <option value="Cobra 16HL">Cobra 16HL Pop Top</option>
-                <option value="Cobra 146HL">Cobra 146HL Hybrid</option>
-              </optgroup>
-              <optgroup label="Storm Range">
-                <option value="Storm 12">Storm 12 Pop Top</option>
-                <option value="Storm 9">Storm 9 Compact</option>
-              </optgroup>
-            </select>
-          </div>
-          <div>
-            <div style="font-size:11px;font-weight:700;color:var(--mut2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Competitor Model</div>
-            <select id="crCompSelect" onchange="renderComparison()" style="width:100%;padding:9px 12px;border:1px solid var(--brd);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;background:#fff;color:var(--txt)">
-              <option value="">Select competitor model…</option>
-            </select>
+        <div style="margin-bottom:16px">
+          <div style="font-size:12px;font-weight:700;color:var(--mut2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Select up to 4 models to compare (Maverick + up to 3 competitors)</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:16px">
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#1C3B6E;margin-bottom:5px">🏕️ Maverick Model</div>
+              <select id="crMavSelect" onchange="renderComparison()" style="width:100%;padding:9px 12px;border:2px solid var(--amb);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;background:#fff;color:var(--txt)">
+                <option value="">Select Maverick model…</option>
+                <optgroup label="Falcon Range">
+                  <option value="Falcon 17DL">Falcon 17DL (Top Seller)</option>
+                  <option value="Falcon 21DL">Falcon 21DL</option>
+                  <option value="Falcon 196">Falcon 196</option>
+                  <option value="Falcon 17C">Falcon 17C</option>
+                  <option value="Falcon 16HL">Falcon 16HL</option>
+                  <option value="Falcon 156C">Falcon 156C</option>
+                  <option value="Falcon 146C">Falcon 146C</option>
+                </optgroup>
+                <optgroup label="Viper Range">
+                  <option value="Viper 16DL">Viper 16DL Platinum Hybrid</option>
+                  <option value="Viper 16C">Viper 16C Platinum Hybrid</option>
+                  <option value="Viper 13DL">Viper 13DL Platinum Hybrid</option>
+                  <option value="Viper 13">Viper 13 Platinum Hybrid</option>
+                </optgroup>
+                <optgroup label="Cobra Range">
+                  <option value="Cobra 16HL">Cobra 16HL Pop Top</option>
+                  <option value="Cobra 146HL">Cobra 146HL Hybrid</option>
+                </optgroup>
+                <optgroup label="Storm Range">
+                  <option value="Storm 12">Storm 12 Pop Top</option>
+                  <option value="Storm 9">Storm 9 Compact</option>
+                </optgroup>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--mut2);margin-bottom:5px">Competitor 1</div>
+              <select id="crComp1" onchange="renderComparison()" style="width:100%;padding:9px 12px;border:1px solid var(--brd);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;background:#fff;color:var(--txt)">
+                <option value="">None</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--mut2);margin-bottom:5px">Competitor 2</div>
+              <select id="crComp2" onchange="renderComparison()" style="width:100%;padding:9px 12px;border:1px solid var(--brd);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;background:#fff;color:var(--txt)">
+                <option value="">None</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--mut2);margin-bottom:5px">Competitor 3</div>
+              <select id="crComp3" onchange="renderComparison()" style="width:100%;padding:9px 12px;border:1px solid var(--brd);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;background:#fff;color:var(--txt)">
+                <option value="">None</option>
+              </select>
+            </div>
           </div>
         </div>
         <div id="crCompareResult"></div>
@@ -1612,15 +1635,32 @@ function showToast(msg,type='ok'){const t=document.getElementById('toast');t.tex
 // ====== COMPETITOR RESEARCH ======
 let crData = [];
 let crSelectedBrand = null;
+let crLastResearched = null;
 
 async function loadCompetitorResearch() {
   if (!crData.length) {
     const r = await fetch('/api/competitors');
-    crData = await r.json();
+    const resp = await r.json();
+    crData = resp.competitors || resp;
+    crLastResearched = resp.last_researched || null;
     buildCompareDropdown();
+    renderLastUpdatedBanner();
   }
   crTab('brands');
   renderBrands();
+}
+
+function renderLastUpdatedBanner() {
+  const banner = document.getElementById('crLastUpdatedBanner');
+  if (!banner || !crLastResearched) return;
+  const d = new Date(crLastResearched + 'T00:00:00');
+  const daysAgo = Math.floor((Date.now() - d)/86400000);
+  const nextUpdate = new Date(d.getTime() + 7*86400000).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'});
+  const stale = daysAgo >= 7;
+  banner.innerHTML = `<span style="font-size:12px;color:${stale?'var(--red)':'var(--mut)'}">
+    ${stale ? '⚠️' : '✅'} Competitor data last researched: <strong>${d.toLocaleDateString('en-AU',{day:'numeric',month:'long',year:'numeric'})}</strong>
+    ${stale ? '— <strong>overdue for refresh</strong>' : `— next refresh due ${nextUpdate}`}
+  </span>`;
 }
 
 function crTab(tab) {
@@ -1715,91 +1755,132 @@ const MAVERICK_SPECS = {
 };
 
 function buildCompareDropdown() {
-  const sel = document.getElementById('crCompSelect');
-  if (!sel) return;
-  crData.forEach(brand => {
-    const grp = document.createElement('optgroup');
-    grp.label = brand.name;
-    brand.models.forEach(m => {
-      const opt = document.createElement('option');
-      opt.value = brand.id + '|' + m.id;
-      opt.textContent = m.name;
-      grp.appendChild(opt);
+  ['crComp1','crComp2','crComp3'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    // clear existing optgroups
+    while (sel.options.length > 1) sel.remove(1);
+    crData.forEach(brand => {
+      const grp = document.createElement('optgroup');
+      grp.label = brand.name;
+      brand.models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = brand.id + '|' + m.id;
+        opt.textContent = m.name;
+        grp.appendChild(opt);
+      });
+      sel.appendChild(grp);
     });
-    sel.appendChild(grp);
   });
+}
+
+function getCompModel(selectId) {
+  const val = document.getElementById(selectId)?.value;
+  if (!val) return null;
+  const [brandId, modelId] = val.split('|').map(Number);
+  const brand = crData.find(c => c.id === brandId);
+  const model = brand?.models.find(m => m.id === modelId);
+  return model ? { brand, model } : null;
 }
 
 function renderComparison() {
   const mavVal = document.getElementById('crMavSelect')?.value;
-  const compVal = document.getElementById('crCompSelect')?.value;
   const container = document.getElementById('crCompareResult');
   if (!container) return;
-  if (!mavVal || !compVal) { container.innerHTML = ''; return; }
 
-  const [brandId, modelId] = compVal.split('|').map(Number);
-  const brand = crData.find(c => c.id === brandId);
-  const compModel = brand?.models.find(m => m.id === modelId);
-  const mavSpecs = MAVERICK_SPECS[mavVal];
-  if (!compModel || !mavSpecs) return;
+  const mavSpecs = mavVal ? MAVERICK_SPECS[mavVal] : null;
+  const comps = ['crComp1','crComp2','crComp3'].map(getCompModel).filter(Boolean);
 
-  const ensuiteLabel = v => v === 'Separate' ? '✅ Separate shower & toilet' : v === 'Combo' ? '🚿 Combo (shower over toilet)' : '—';
-  const rows = [
-    { label:'💰 Price', mav: mavSpecs.price_from||'POA', comp: compModel.price_from||'—', compare:false },
-    { label:'☀️ Solar Capacity', mav: mavSpecs.solar_watts ? (mavSpecs.solar_watts+'W'+(mavSpecs.solar_brand?' — '+mavSpecs.solar_brand:'')) : '—', comp: compModel.solar_watts ? compModel.solar_watts+'W' : '—', numMav:mavSpecs.solar_watts, numComp:compModel.solar_watts },
-    { label:'🔋 Battery Capacity', mav: mavSpecs.battery_ah ? mavSpecs.battery_ah+'Ah' : '—', comp: compModel.battery_ah ? compModel.battery_ah+'Ah' : '—', numMav:mavSpecs.battery_ah, numComp:compModel.battery_ah },
-    { label:'⚡ Battery Type', mav: mavSpecs.battery_type||'—', comp: compModel.battery_type||'—', compare:false },
-    { label:'🛡️ BMS System', mav: mavSpecs.bms||'—', comp: compModel.bms||'—', compare:false },
-    { label:'🚿 Ensuite', mav: ensuiteLabel(mavSpecs.ensuite), comp: ensuiteLabel(compModel.ensuite), compare:false },
-    { label:'💧 Fresh Water', mav: mavSpecs.water_tank_l ? mavSpecs.water_tank_l+'L' : '—', comp: compModel.water_tank_l ? compModel.water_tank_l+'L' : '—', numMav:mavSpecs.water_tank_l, numComp:compModel.water_tank_l },
-    { label:'🪣 Grey Water', mav: mavSpecs.grey_water_l ? mavSpecs.grey_water_l+'L' : '—', comp: compModel.grey_water_l ? compModel.grey_water_l+'L' : '—', compare:false },
-    { label:'📏 Body Length', mav: mavSpecs.length_mm ? (mavSpecs.length_mm+'mm') : '—', comp: compModel.length_ft ? compModel.length_ft+'ft' : '—', compare:false },
-    { label:'⚖️ Tare Weight', mav: mavSpecs.tare_kg ? mavSpecs.tare_kg+'kg' : '—', comp: compModel.tare_kg ? compModel.tare_kg+'kg' : '—', numMav:mavSpecs.tare_kg, numComp:compModel.tare_kg, lower:true },
-    { label:'🚗 ATM', mav: mavSpecs.atm_kg ? mavSpecs.atm_kg+'kg' : '—', comp: compModel.atm_kg ? compModel.atm_kg+'kg' : '—', compare:false },
-    { label:'🔥 Hot Water', mav: mavSpecs.hot_water||'—', comp: '—', compare:false },
-    { label:'⚡ Inverter', mav: mavSpecs.inverter_w ? mavSpecs.inverter_w+'W' : '—', comp: '—', compare:false },
+  if (!mavVal || comps.length === 0) {
+    container.innerHTML = '<p style="color:var(--mut);font-size:13px;padding:20px 0">Select a Maverick model and at least one competitor model to compare.</p>';
+    return;
+  }
+
+  const ensuiteLabel = v => v === 'Separate' ? '✅ Separate' : v === 'Combo' ? '🚿 Combo' : '—';
+  const ensuiteTitle = v => v === 'Separate' ? 'Separate shower & toilet' : v === 'Combo' ? 'Combo (shower over toilet)' : '—';
+
+  const specs = [
+    { label:'💰 Price', get: s => s?.price_from||'POA', mavGet: m => m.price_from||'POA', num:false },
+    { label:'☀️ Solar', get: s => s?.solar_watts ? s.solar_watts+'W' : '—', mavGet: m => m.solar_watts ? m.solar_watts+'W'+(m.solar_brand?' — '+m.solar_brand:'') : '—', numKey:'solar_watts', higher:true },
+    { label:'🔋 Battery', get: s => s?.battery_ah ? s.battery_ah+'Ah' : '—', mavGet: m => m.battery_ah ? m.battery_ah+'Ah' : '—', numKey:'battery_ah', higher:true },
+    { label:'⚡ Battery Type', get: s => s?.battery_type||'—', mavGet: m => m.battery_type||'—', num:false },
+    { label:'🛡️ BMS', get: s => s?.bms||'—', mavGet: m => m.bms||'—', num:false },
+    { label:'🚿 Ensuite', get: s => ensuiteLabel(s?.ensuite), mavGet: m => ensuiteLabel(m.ensuite), title: s => ensuiteTitle(s?.ensuite), mavTitle: m => ensuiteTitle(m.ensuite), num:false },
+    { label:'💧 Fresh Water', get: s => s?.water_tank_l ? s.water_tank_l+'L' : '—', mavGet: m => m.water_tank_l ? m.water_tank_l+'L' : '—', numKey:'water_tank_l', higher:true },
+    { label:'🪣 Grey Water', get: s => s?.grey_water_l ? s.grey_water_l+'L' : '—', mavGet: m => m.grey_water_l ? m.grey_water_l+'L' : '—', num:false },
+    { label:'📏 Length', get: s => s?.length_ft ? s.length_ft+'ft' : '—', mavGet: m => m.length_mm ? m.length_mm+'mm' : '—', num:false },
+    { label:'⚖️ Tare', get: s => s?.tare_kg ? s.tare_kg+'kg' : '—', mavGet: m => m.tare_kg ? m.tare_kg+'kg' : '—', numKey:'tare_kg', lower:true },
+    { label:'🚗 ATM', get: s => s?.atm_kg ? s.atm_kg+'kg' : '—', mavGet: m => m.atm_kg ? m.atm_kg+'kg' : '—', num:false },
+    { label:'🔥 Hot Water', get: s => s?.hot_water||'—', mavGet: m => m.hot_water||'—', num:false },
+    { label:'⚡ Inverter', get: s => s?.inverter_w ? s.inverter_w+'W' : '—', mavGet: m => m.inverter_w ? m.inverter_w+'W' : '—', num:false },
   ];
 
-  const rowsHTML = rows.map(r => {
-    let mavBg = '', compBg = '';
-    if (r.numMav != null && r.numComp != null) {
-      const mavWins = r.lower ? r.numMav <= r.numComp : r.numMav >= r.numComp;
-      mavBg = mavWins ? 'background:rgba(16,185,129,.08)' : 'background:rgba(239,68,68,.05)';
-      compBg = !mavWins ? 'background:rgba(16,185,129,.08)' : 'background:rgba(239,68,68,.05)';
-    }
+  const allNums = specs.filter(s => s.numKey).map(s => {
+    const vals = [mavSpecs?.[s.numKey], ...comps.map(c => c.model[s.numKey])].filter(v => v != null);
+    const best = s.higher ? Math.max(...vals) : Math.min(...vals);
+    return { key: s.numKey, best, higher: s.higher };
+  });
+  const getBest = (key) => allNums.find(n => n.key === key);
+
+  const colCount = 1 + comps.length;
+  const thStyle = (i) => i === 0
+    ? 'padding:10px 12px;text-align:left;font-size:13px;font-weight:700;color:#1C3B6E;border-bottom:2px solid var(--amb);background:rgba(43,94,167,.06);min-width:160px'
+    : 'padding:10px 12px;text-align:left;font-size:13px;font-weight:700;color:var(--txt);border-bottom:2px solid var(--brd);min-width:150px';
+
+  const cellBg = (val, numInfo) => {
+    if (!numInfo || val == null) return '';
+    return val === numInfo.best ? 'background:rgba(16,185,129,.1)' : 'background:rgba(239,68,68,.05)';
+  };
+
+  const rowsHTML = specs.map(spec => {
+    const mavVal2 = mavSpecs ? spec.mavGet(mavSpecs) : '—';
+    const mavNum = mavSpecs && spec.numKey ? mavSpecs[spec.numKey] : null;
+    const numInfo = spec.numKey ? getBest(spec.numKey) : null;
+    const mavBg = cellBg(mavNum, numInfo);
+    const mavTitleAttr = spec.mavTitle ? `title="${ensuiteTitle(mavSpecs?.ensuite)}"` : '';
+
+    const compCells = comps.map(c => {
+      const val = spec.get(c.model);
+      const num = spec.numKey ? c.model[spec.numKey] : null;
+      const bg = cellBg(num, numInfo);
+      const titleAttr = spec.title ? `title="${ensuiteTitle(c.model.ensuite)}"` : '';
+      return `<td style="padding:9px 12px;font-size:13px;border-bottom:1px solid var(--brd);${bg}" ${titleAttr}>${esc(String(val))}</td>`;
+    }).join('');
+
     return `<tr>
-      <td style="padding:10px 14px;font-size:13px;font-weight:600;color:var(--txt);border-bottom:1px solid var(--brd);white-space:nowrap">${r.label}</td>
-      <td style="padding:10px 14px;font-size:13px;color:var(--txt);border-bottom:1px solid var(--brd);${mavBg}">${esc(String(r.mav))}</td>
-      <td style="padding:10px 14px;font-size:13px;color:var(--txt);border-bottom:1px solid var(--brd);${compBg}">${esc(String(r.comp))}</td>
+      <td style="padding:9px 12px;font-size:12px;font-weight:700;color:var(--mut2);border-bottom:1px solid var(--brd);white-space:nowrap;background:var(--bg)">${spec.label}</td>
+      <td style="padding:9px 12px;font-size:13px;border-bottom:1px solid var(--brd);${mavBg}" ${mavTitleAttr}>${esc(String(mavVal2))}</td>
+      ${compCells}
     </tr>`;
   }).join('');
 
-  const mavFeatures = (mavSpecs.key_features||[]).map(f=>`<li>${esc(f)}</li>`).join('');
-  const compFeatures = (compModel.key_features||[]).map(f=>`<li>${esc(f)}</li>`).join('');
+  const featureCols = [
+    `<div style="background:#fff;border:1px solid var(--amb);border-radius:12px;padding:14px;flex:1;min-width:200px">
+      <div style="font-size:11px;font-weight:700;color:var(--amb);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">🏕️ Maverick ${esc(mavVal)}</div>
+      <ul style="margin:0;padding-left:16px;font-size:12px;color:var(--txt);line-height:1.8">${(mavSpecs?.key_features||[]).map(f=>`<li>${esc(f)}</li>`).join('')||'<li>See product guide</li>'}</ul>
+    </div>`,
+    ...comps.map(c =>
+      `<div style="background:#fff;border:1px solid var(--brd);border-radius:12px;padding:14px;flex:1;min-width:200px">
+        <div style="font-size:11px;font-weight:700;color:var(--mut2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">${esc(c.brand.name)} — ${esc(c.model.name)}</div>
+        <ul style="margin:0;padding-left:16px;font-size:12px;color:var(--txt);line-height:1.8">${(c.model.key_features||[]).map(f=>`<li>${esc(f)}</li>`).join('')||'<li>See manufacturer website</li>'}</ul>
+      </div>`
+    )
+  ].join('');
 
   container.innerHTML = `
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--brd);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)">
         <thead>
           <tr style="background:var(--bg)">
-            <th style="padding:12px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--mut2);text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--brd)">Spec</th>
-            <th style="padding:12px 14px;text-align:left;font-size:13px;font-weight:700;color:#1C3B6E;border-bottom:2px solid var(--amb);background:rgba(43,94,167,.05)">🏕️ Maverick — ${esc(mavVal)}</th>
-            <th style="padding:12px 14px;text-align:left;font-size:13px;font-weight:700;color:var(--txt);border-bottom:2px solid var(--brd)">${esc(brand.name)} — ${esc(compModel.name)}</th>
+            <th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--mut2);text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--brd);background:var(--bg);min-width:100px">Spec</th>
+            <th style="${thStyle(0)}">🏕️ Maverick<br><span style="font-weight:500;font-size:12px">${esc(mavVal)}</span></th>
+            ${comps.map((c,i) => `<th style="${thStyle(i+1)}">${esc(c.brand.name)}<br><span style="font-weight:500;font-size:12px">${esc(c.model.name)}</span></th>`).join('')}
           </tr>
         </thead>
         <tbody>${rowsHTML}</tbody>
       </table>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
-      <div style="background:#fff;border:1px solid var(--amb);border-radius:12px;padding:16px">
-        <div style="font-size:12px;font-weight:700;color:var(--amb);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">🏕️ Maverick ${esc(mavVal)} — Key Features</div>
-        <ul style="margin:0;padding-left:16px;font-size:13px;color:var(--txt);line-height:1.8">${mavFeatures||'<li>See product guide</li>'}</ul>
-      </div>
-      <div style="background:#fff;border:1px solid var(--brd);border-radius:12px;padding:16px">
-        <div style="font-size:12px;font-weight:700;color:var(--mut2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">${esc(brand.name)} ${esc(compModel.name)} — Key Features</div>
-        <ul style="margin:0;padding-left:16px;font-size:13px;color:var(--txt);line-height:1.8">${compFeatures||'<li>See manufacturer website</li>'}</ul>
-      </div>
-    </div>`;
+    <div style="display:flex;gap:14px;margin-top:16px;flex-wrap:wrap">${featureCols}</div>`;
 }
 
 // AI query

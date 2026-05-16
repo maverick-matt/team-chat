@@ -184,7 +184,8 @@ db.exec(`
     name TEXT NOT NULL,
     website TEXT,
     description TEXT,
-    sort_order INTEGER DEFAULT 0
+    sort_order INTEGER DEFAULT 0,
+    last_researched TEXT DEFAULT '2026-05-16'
   );
   CREATE TABLE IF NOT EXISTS competitor_models (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -230,6 +231,9 @@ try { db.exec("ALTER TABLE users ADD COLUMN mfa_enabled INTEGER DEFAULT 0"); } c
 try { db.exec("ALTER TABLE users ADD COLUMN email TEXT"); } catch(e) {}
 try { db.exec("ALTER TABLE competitor_models ADD COLUMN ensuite TEXT"); } catch(e) {}
 try { db.exec("ALTER TABLE competitor_models ADD COLUMN grey_water_l INTEGER"); } catch(e) {}
+try { db.exec("ALTER TABLE competitor_models ADD COLUMN hot_water TEXT"); } catch(e) {}
+try { db.exec("ALTER TABLE competitor_models ADD COLUMN inverter_w INTEGER"); } catch(e) {}
+try { db.exec("ALTER TABLE competitors ADD COLUMN last_researched TEXT DEFAULT '2026-05-16'"); } catch(e) {}
 db.exec(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -1113,7 +1117,8 @@ app.get('/api/competitors', auth, (req,res) => {
     c.models = db.prepare('SELECT * FROM competitor_models WHERE competitor_id=? ORDER BY name').all(c.id);
     c.models.forEach(m => { try { m.key_features = JSON.parse(m.key_features||'[]'); } catch { m.key_features=[]; } });
   });
-  res.json(competitors);
+  const oldest = db.prepare('SELECT MIN(last_researched) as oldest FROM competitors').get();
+  res.json({ competitors, last_researched: oldest?.oldest || '2026-05-16' });
 });
 
 app.get('/api/competitors/:id/models', auth, (req,res) => {
@@ -1166,7 +1171,11 @@ app.post('/api/competitors/ai-query', auth, async (req,res) => {
     const response = await Anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
-      system: `You are a knowledgeable Maverick Campers sales assistant helping staff answer questions about competitor products and how Maverick Campers compares. Be factual, concise, and helpful. Always present Maverick Campers in a positive light where accurate. When specs are unknown, say so rather than guessing.
+      system: `You are a specialist competitive intelligence assistant for Maverick Campers staff. Your ONLY purpose is to answer questions about caravans, camper trailers, and the Australian caravan industry — including competitor products, Maverick Campers models, specs, features, pricing, and sales talking points.
+
+STRICT SCOPE: Only answer questions related to caravans, camper trailers, towing, camping, off-road travel, caravan features, or the Australian RV industry. If asked anything outside this scope (coding, politics, general knowledge, personal advice, etc.), respond: "I'm only able to help with caravan and competitor research questions. Please ask about caravans, specs, or competitors."
+
+Be factual, concise, and helpful. Always present Maverick Campers positively where accurate. When specs are unknown, say so — never guess.
 
 Current competitor data:
 ${competitorContext}
@@ -1177,6 +1186,64 @@ ${maverickContext}`,
     res.json({ answer: response.content[0].text });
   } catch(e) {
     res.status(500).json({ error: 'AI query failed: ' + e.message });
+  }
+});
+
+// Bulk-update endpoint — called by the weekly remote research agent
+app.post('/api/competitors/bulk-update', (req, res) => {
+  const key = req.headers['x-update-key'] || req.body?.update_key;
+  if (!key || key !== process.env.COMPETITOR_UPDATE_KEY)
+    return res.status(401).json({error: 'Unauthorised'});
+
+  const {brands} = req.body; // array of brand objects with models[]
+  if (!Array.isArray(brands) || !brands.length)
+    return res.status(400).json({error: 'No brands provided'});
+
+  const today = new Date().toISOString().split('T')[0];
+  let updated = 0, errors = [];
+
+  const updateTx = db.transaction(() => {
+    brands.forEach(brand => {
+      const existing = db.prepare('SELECT id FROM competitors WHERE name=?').get(brand.brand || brand.name);
+      if (!existing) { errors.push(`Brand not found: ${brand.brand||brand.name}`); return; }
+      // Update brand description and last_researched
+      db.prepare('UPDATE competitors SET description=?,last_researched=? WHERE id=?')
+        .run(brand.description||null, brand.last_researched||today, existing.id);
+      // Update each model
+      (brand.models||[]).forEach(m => {
+        const existingModel = db.prepare('SELECT id FROM competitor_models WHERE competitor_id=? AND name=?').get(existing.id, m.name);
+        if (existingModel) {
+          db.prepare(`UPDATE competitor_models SET category=?,price_from=?,solar_watts=?,battery_ah=?,battery_type=?,
+            bms=?,water_tank_l=?,grey_water_l=?,length_ft=?,tare_kg=?,atm_kg=?,key_features=?,comparable_maverick=?,
+            ensuite=?,hot_water=?,inverter_w=? WHERE id=?`)
+            .run(m.category||null, m.price_from||null, m.solar_watts||null, m.battery_ah||null,
+              m.battery_type||null, m.bms||null, m.water_tank_l||null, m.grey_water_l||null,
+              m.length_ft||null, m.tare_kg||null, m.atm_kg||null,
+              JSON.stringify(m.key_features||[]), m.comparable_maverick||null,
+              m.ensuite||null, m.hot_water||null, m.inverter_w||null, existingModel.id);
+          updated++;
+        } else {
+          // Insert new model
+          db.prepare(`INSERT INTO competitor_models (competitor_id,name,category,price_from,solar_watts,battery_ah,
+            battery_type,bms,water_tank_l,grey_water_l,length_ft,tare_kg,atm_kg,key_features,comparable_maverick,
+            ensuite,hot_water,inverter_w) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+            .run(existing.id, m.name, m.category||null, m.price_from||null, m.solar_watts||null,
+              m.battery_ah||null, m.battery_type||null, m.bms||null, m.water_tank_l||null,
+              m.grey_water_l||null, m.length_ft||null, m.tare_kg||null, m.atm_kg||null,
+              JSON.stringify(m.key_features||[]), m.comparable_maverick||null,
+              m.ensuite||null, m.hot_water||null, m.inverter_w||null);
+          updated++;
+        }
+      });
+    });
+  });
+
+  try {
+    updateTx();
+    console.log(`Competitor bulk-update: ${updated} models updated on ${today}`);
+    res.json({ok: true, updated, errors, date: today});
+  } catch(e) {
+    res.status(500).json({error: e.message});
   }
 });
 
