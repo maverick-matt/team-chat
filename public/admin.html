@@ -156,6 +156,7 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
     <div class="tab" onclick="switchTab('forms',this)">📋 Forms</div>
     <div class="tab" onclick="switchTab('kb',this)">📚 Knowledge Base</div>
     <div class="tab" onclick="switchTab('channels',this)">💬 Channels</div>
+    <div class="tab" onclick="switchTab('import',this)">📥 Import CSV</div>
   </div>
 
   <!-- TEAM MEMBERS -->
@@ -323,6 +324,68 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
       <div class="card-head"><div class="card-title">Chat Channels</div><button class="btn btn-amb" onclick="openAddChannel()">+ Add Channel</button></div>
       <div class="tbl-wrap"><table><thead><tr><th>Channel</th><th>Description</th><th>Actions</th></tr></thead>
       <tbody id="channelsTable"><tr class="empty-row"><td colspan="3">Loading...</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- IMPORT CSV TAB -->
+  <div class="panel" id="panel-import">
+    <div class="card">
+      <div class="card-head"><div class="card-title">Import from Connecteam / CSV</div></div>
+      <p style="color:var(--mut);font-size:13px;margin-bottom:18px;line-height:1.6">
+        Export your data from Connecteam (or any system) as CSV and import it here. This lets you migrate without using the Connecteam API.
+        We auto-detect Connecteam's column names. Preview before committing.
+      </p>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
+
+        <!-- Users CSV -->
+        <div style="background:var(--bg);border:1px solid var(--brd);border-radius:12px;padding:18px">
+          <h3 style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:6px">👥 Team Members</h3>
+          <p style="font-size:12px;color:var(--mut);margin-bottom:12px;line-height:1.5">
+            Expected columns: <code>name</code>, <code>email</code> (or <code>username</code>), <code>role</code>, <code>position</code>, <code>mobile</code>.
+            Default password: <code>welcome2025</code> — users reset on first login.
+          </p>
+          <input type="file" id="usersCSV" accept=".csv" style="font-size:12px;margin-bottom:10px"/>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="previewCSV('users')">Preview</button>
+            <button class="btn btn-amb btn-sm" onclick="importCSV('users')">Import</button>
+          </div>
+          <div id="usersImportResult" style="margin-top:10px;font-size:12px"></div>
+        </div>
+
+        <!-- Locations CSV -->
+        <div style="background:var(--bg);border:1px solid var(--brd);border-radius:12px;padding:18px">
+          <h3 style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:6px">📍 Store Locations</h3>
+          <p style="font-size:12px;color:var(--mut);margin-bottom:12px;line-height:1.5">
+            Expected columns: <code>name</code>, <code>address</code>, <code>lat</code>, <code>lng</code>, <code>radius</code>, <code>timezone</code>.
+          </p>
+          <input type="file" id="storesCSV" accept=".csv" style="font-size:12px;margin-bottom:10px"/>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="previewCSV('stores')">Preview</button>
+            <button class="btn btn-amb btn-sm" onclick="importCSV('stores')">Import</button>
+          </div>
+          <div id="storesImportResult" style="margin-top:10px;font-size:12px"></div>
+        </div>
+
+        <!-- Time Records CSV -->
+        <div style="background:var(--bg);border:1px solid var(--brd);border-radius:12px;padding:18px">
+          <h3 style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:6px">⏱️ Time Records</h3>
+          <p style="font-size:12px;color:var(--mut);margin-bottom:12px;line-height:1.5">
+            Expected: <code>user_email</code>, <code>store_name</code>, <code>clock_in</code>, <code>clock_out</code>, <code>notes</code>.
+            Dates in ISO 8601 (e.g. 2025-05-01T08:30:00).
+          </p>
+          <input type="file" id="timeCSV" accept=".csv" style="font-size:12px;margin-bottom:10px"/>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="previewCSV('time')">Preview</button>
+            <button class="btn btn-amb btn-sm" onclick="importCSV('time')">Import</button>
+          </div>
+          <div id="timeImportResult" style="margin-top:10px;font-size:12px"></div>
+        </div>
+
+      </div>
+
+      <!-- Preview table -->
+      <div id="csvPreview" style="margin-top:20px"></div>
     </div>
   </div>
 
@@ -575,6 +638,65 @@ function switchTab(name,el){
   if (name==='positions') loadPositions();
   if (name==='tsreport') initTSReport();
   if (name==='orgchart') loadOrgChart();
+}
+
+// ===== CSV IMPORT =====
+async function readCsvFile(inputId) {
+  const file = document.getElementById(inputId)?.files?.[0];
+  if (!file) { showToast('Please select a CSV file first','err'); return null; }
+  return await file.text();
+}
+
+async function previewCSV(type) {
+  const inputMap = { users:'usersCSV', stores:'storesCSV', time:'timeCSV' };
+  const resultMap = { users:'usersImportResult', stores:'storesImportResult', time:'timeImportResult' };
+  const csv = await readCsvFile(inputMap[type]);
+  if (!csv) return;
+
+  document.getElementById(resultMap[type]).innerHTML = '<span style="color:var(--mut)">Loading preview...</span>';
+  const r = await fetch(`/api/admin/import/${type}/preview`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({csv}) });
+  const d = await r.json();
+  if (!r.ok) { document.getElementById(resultMap[type]).innerHTML = `<span style="color:var(--red)">${esc(d.error)}</span>`; return; }
+  document.getElementById(resultMap[type]).innerHTML = `<span style="color:var(--mut)">Found ${d.count} rows · ${d.headers.length} columns detected</span>`;
+  renderCsvPreview(type, d);
+}
+
+function renderCsvPreview(type, data) {
+  const sample = data.sample || [];
+  if (!sample.length) { document.getElementById('csvPreview').innerHTML = ''; return; }
+  const keys = Object.keys(sample[0]);
+  const html = `
+    <div class="card" style="margin-top:0">
+      <div class="card-head">
+        <div class="card-title">Preview — first ${sample.length} of ${data.count} rows (${type})</div>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('csvPreview').innerHTML=''">Close</button>
+      </div>
+      <div class="tbl-wrap" style="max-height:400px;overflow:auto"><table>
+        <thead><tr>${keys.map(k=>`<th>${esc(k)}</th>`).join('')}</tr></thead>
+        <tbody>${sample.map(row => `<tr>${keys.map(k=>`<td>${esc(String(row[k]||''))}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+  document.getElementById('csvPreview').innerHTML = html;
+}
+
+async function importCSV(type) {
+  const inputMap = { users:'usersCSV', stores:'storesCSV', time:'timeCSV' };
+  const resultMap = { users:'usersImportResult', stores:'storesImportResult', time:'timeImportResult' };
+  const csv = await readCsvFile(inputMap[type]);
+  if (!csv) return;
+
+  if (!confirm(`Import ${type} from this CSV? Existing records with the same key will be skipped.`)) return;
+
+  const resultEl = document.getElementById(resultMap[type]);
+  resultEl.innerHTML = '<span style="color:var(--mut)">Importing...</span>';
+  const r = await fetch(`/api/admin/import/${type}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({csv}) });
+  const d = await r.json();
+  if (!r.ok) { resultEl.innerHTML = `<span style="color:var(--red)">${esc(d.error)}</span>`; return; }
+
+  const errorList = d.errors?.length ? `<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--red)">${d.total_errors} error${d.total_errors!==1?'s':''}</summary><ul style="margin:6px 0 0;padding-left:18px;font-size:11px;color:var(--mut)">${d.errors.map(e=>`<li>${esc(e)}</li>`).join('')}</ul></details>` : '';
+  resultEl.innerHTML = `<div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:8px;padding:10px;color:#059669"><strong>✓ ${d.created} created</strong> · ${d.skipped} skipped (duplicates)</div>${errorList}`;
+  if (type==='users') loadUsers();
+  if (type==='stores') loadStores();
 }
 
 // ===== USERS =====

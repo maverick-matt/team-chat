@@ -1341,4 +1341,144 @@ if (!db.prepare('SELECT id FROM competitors LIMIT 1').get()) {
   console.log('Competitor data seeded');
 }
 
+// ---- CSV IMPORT ----
+function parseCSV(text) {
+  const lines = text.replace(/\r\n/g,'\n').split('\n').filter(l => l.trim());
+  if (!lines.length) return { headers: [], rows: [] };
+  const parseLine = (line) => {
+    const result = []; let cur = ''; let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { inQuotes = !inQuotes; continue; }
+      if (c === ',' && !inQuotes) { result.push(cur.trim()); cur = ''; continue; }
+      cur += c;
+    }
+    result.push(cur.trim());
+    return result;
+  };
+  const headers = parseLine(lines[0]).map(h => h.toLowerCase().replace(/\s+/g,'_'));
+  const rows = lines.slice(1).map(line => {
+    const cells = parseLine(line);
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = cells[i] || '');
+    return obj;
+  });
+  return { headers, rows };
+}
+
+function normaliseUserRow(row) {
+  const r = {};
+  if (row.first_name && row.last_name) r.name = `${row.first_name} ${row.last_name}`;
+  else r.name = row.name || row.full_name || row.first_name || '';
+  r.email = row.email || row.email_address || '';
+  r.username = (row.username || row.email || row.email_address || '').toLowerCase().trim();
+  r.role = (row.role || row.user_type || 'member').toLowerCase();
+  if (!['admin','manager','member'].includes(r.role)) r.role = 'member';
+  r.position = row.position || row.job_title || row.title || row.department || '';
+  r.mobile = row.mobile || row.phone || row.phone_number || '';
+  return r;
+}
+function normaliseStoreRow(row) {
+  return {
+    name: row.name || row.location || row.branch || '',
+    address: row.address || '',
+    lat: parseFloat(row.lat || row.latitude) || 0,
+    lng: parseFloat(row.lng || row.lon || row.longitude) || 0,
+    radius: parseInt(row.radius || row.geofence_radius || 300),
+    timezone: row.timezone || row.tz || 'Australia/Sydney',
+  };
+}
+function normaliseTimeRow(row) {
+  return {
+    user_email: (row.user_email || row.email || row.user || '').toLowerCase().trim(),
+    store_name: row.store_name || row.location || row.branch || '',
+    clock_in: row.clock_in || row.start || row.start_time || '',
+    clock_out: row.clock_out || row.end || row.end_time || '',
+    notes: row.notes || row.note || '',
+  };
+}
+
+app.post('/api/admin/import/users/preview', auth, adminOnly, (req, res) => {
+  const { csv } = req.body;
+  if (!csv) return res.status(400).json({ error: 'No CSV provided' });
+  const { headers, rows } = parseCSV(csv);
+  res.json({ headers, count: rows.length, sample: rows.slice(0, 10).map(normaliseUserRow) });
+});
+
+app.post('/api/admin/import/users', auth, adminOnly, (req, res) => {
+  const { csv } = req.body;
+  if (!csv) return res.status(400).json({ error: 'No CSV provided' });
+  const { rows } = parseCSV(csv);
+  const defaultPasswordHash = bcrypt.hashSync('welcome2025', 10);
+  let created = 0, skipped = 0, errors = [];
+  rows.forEach((row, idx) => {
+    const u = normaliseUserRow(row);
+    if (!u.name || !u.username) { skipped++; errors.push(`Row ${idx+2}: missing name or email/username`); return; }
+    try {
+      const existing = db.prepare('SELECT id FROM users WHERE username=?').get(u.username);
+      if (existing) { skipped++; return; }
+      const color = COLORS[Math.floor(Math.random()*COLORS.length)];
+      db.prepare('INSERT INTO users (username, name, password_hash, role, avatar_color, email) VALUES (?,?,?,?,?,?)')
+        .run(u.username, u.name, defaultPasswordHash, u.role, color, u.email);
+      created++;
+    } catch(e) { errors.push(`Row ${idx+2}: ${e.message}`); }
+  });
+  res.json({ created, skipped, errors: errors.slice(0, 20), total_errors: errors.length });
+});
+
+app.post('/api/admin/import/stores/preview', auth, adminOnly, (req, res) => {
+  const { csv } = req.body;
+  if (!csv) return res.status(400).json({ error: 'No CSV provided' });
+  const { headers, rows } = parseCSV(csv);
+  res.json({ headers, count: rows.length, sample: rows.slice(0, 10).map(normaliseStoreRow) });
+});
+
+app.post('/api/admin/import/stores', auth, adminOnly, (req, res) => {
+  const { csv } = req.body;
+  if (!csv) return res.status(400).json({ error: 'No CSV provided' });
+  const { rows } = parseCSV(csv);
+  let created = 0, skipped = 0, errors = [];
+  rows.forEach((row, idx) => {
+    const s = normaliseStoreRow(row);
+    if (!s.name || !s.lat || !s.lng) { skipped++; errors.push(`Row ${idx+2}: missing name/lat/lng`); return; }
+    try {
+      const exists = db.prepare('SELECT id FROM stores WHERE name=?').get(s.name);
+      if (exists) { skipped++; return; }
+      db.prepare('INSERT INTO stores (name,address,lat,lng,radius,timezone) VALUES (?,?,?,?,?,?)')
+        .run(s.name, s.address, s.lat, s.lng, s.radius, s.timezone);
+      created++;
+    } catch(e) { errors.push(`Row ${idx+2}: ${e.message}`); }
+  });
+  res.json({ created, skipped, errors: errors.slice(0, 20), total_errors: errors.length });
+});
+
+app.post('/api/admin/import/time/preview', auth, adminOnly, (req, res) => {
+  const { csv } = req.body;
+  if (!csv) return res.status(400).json({ error: 'No CSV provided' });
+  const { headers, rows } = parseCSV(csv);
+  res.json({ headers, count: rows.length, sample: rows.slice(0, 10).map(normaliseTimeRow) });
+});
+
+app.post('/api/admin/import/time', auth, adminOnly, (req, res) => {
+  const { csv } = req.body;
+  if (!csv) return res.status(400).json({ error: 'No CSV provided' });
+  const { rows } = parseCSV(csv);
+  let created = 0, skipped = 0, errors = [];
+  rows.forEach((row, idx) => {
+    const t = normaliseTimeRow(row);
+    const user = db.prepare('SELECT id FROM users WHERE username=? OR email=?').get(t.user_email, t.user_email);
+    if (!user) { skipped++; errors.push(`Row ${idx+2}: user not found (${t.user_email})`); return; }
+    const store = db.prepare('SELECT id FROM stores WHERE name=?').get(t.store_name);
+    if (!store) { skipped++; errors.push(`Row ${idx+2}: store not found (${t.store_name})`); return; }
+    try {
+      const clockIn = new Date(t.clock_in).toISOString().replace('T',' ').slice(0,19);
+      const clockOut = t.clock_out ? new Date(t.clock_out).toISOString().replace('T',' ').slice(0,19) : null;
+      db.prepare('INSERT INTO clock_records (user_id,store_id,clock_in_at,clock_out_at,notes) VALUES (?,?,?,?,?)')
+        .run(user.id, store.id, clockIn, clockOut, t.notes||'');
+      created++;
+    } catch(e) { errors.push(`Row ${idx+2}: ${e.message}`); }
+  });
+  res.json({ created, skipped, errors: errors.slice(0, 20), total_errors: errors.length });
+});
+
 httpServer.listen(PORT,'0.0.0.0',()=>console.log('Maverick Hub running on port '+PORT));
