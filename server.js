@@ -234,6 +234,10 @@ try { db.exec("ALTER TABLE competitor_models ADD COLUMN grey_water_l INTEGER"); 
 try { db.exec("ALTER TABLE competitor_models ADD COLUMN hot_water TEXT"); } catch(e) {}
 try { db.exec("ALTER TABLE competitor_models ADD COLUMN inverter_w INTEGER"); } catch(e) {}
 try { db.exec("ALTER TABLE competitors ADD COLUMN last_researched TEXT DEFAULT '2026-05-16'"); } catch(e) {}
+try { db.exec("ALTER TABLE competitor_models ADD COLUMN solar_panel_type TEXT"); } catch(e) {}
+try { db.exec("ALTER TABLE competitor_models ADD COLUMN solar_mounting TEXT"); } catch(e) {}
+try { db.exec("ALTER TABLE competitor_models ADD COLUMN solar_brand TEXT"); } catch(e) {}
+try { db.exec("ALTER TABLE competitor_models ADD COLUMN solar_notes TEXT"); } catch(e) {}
 db.exec(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,

@@ -1705,8 +1705,10 @@ function renderBrands(filterBrand) {
 function renderModelCard(m) {
   const specs = [
     ['☀️ Solar', m.solar_watts ? m.solar_watts+'W' : '—'],
+    ['🔆 Panel Type', m.solar_panel_type || '—'],
+    ['🔩 Mounting', m.solar_mounting || '—'],
     ['🔋 Battery', m.battery_ah ? m.battery_ah+'Ah' : '—'],
-    ['⚡ Type', m.battery_type || '—'],
+    ['⚡ Bat. Type', m.battery_type || '—'],
     ['🛡️ BMS', m.bms || '—'],
     ['💧 Water', m.water_tank_l ? m.water_tank_l+'L' : '—'],
     ['📏 Length', m.length_ft ? m.length_ft+"ft" : '—'],
@@ -1734,7 +1736,7 @@ function renderModelCard(m) {
 
 const MAVERICK_SPECS = {
   // ── Falcon Range ──
-  'Falcon 146C': { solar_watts:600, solar_brand:'Renogy', battery_ah:400, battery_type:'1×400Ah Lithium', bms:'Renogy', water_tank_l:160, grey_water_l:80, length_mm:6965, tare_kg:2360, atm_kg:3000, price_from:'$67,990', ensuite:'Combo', hot_water:'Arana Instant', inverter_w:3000, suspension:'Pedders Adjustable IFS', tyre:'265/75R16', fridge:'Thetford 175L', key_features:['Full composite construction','Pedders adjustable IFS','265/75R16 tyres with Timken bearings','Arana instant hot water','3000W inverter','Thetford 175L fridge','Combo ensuite'] },
+  'Falcon 146C': { solar_panel_type:'Rigid Glass Monocrystalline', solar_mounting:'Raised on brackets (airflow gap)', solar_brand:'Renogy', solar_watts:600, battery_ah:400, battery_type:'1×400Ah Lithium', bms:'Renogy', water_tank_l:160, grey_water_l:80, length_mm:6965, tare_kg:2360, atm_kg:3000, price_from:'$67,990', ensuite:'Combo', hot_water:'Arana Instant', inverter_w:3000, suspension:'Pedders Adjustable IFS', tyre:'265/75R16', fridge:'Thetford 175L', key_features:['Full composite construction','Pedders adjustable IFS','265/75R16 tyres with Timken bearings','Arana instant hot water','3000W inverter','Thetford 175L fridge','Combo ensuite'] },
   'Falcon 156C': { solar_watts:600, solar_brand:'Renogy', battery_ah:400, battery_type:'1×400Ah Lithium', bms:'Renogy', water_tank_l:190, grey_water_l:80, length_mm:7278, tare_kg:2428, atm_kg:3000, price_from:'$74,990', ensuite:'Separate', hot_water:'Arana Instant', inverter_w:3000, suspension:'Pedders Adjustable IFS', tyre:'265/75R16', fridge:'Thetford 175L', key_features:['Full composite construction','Pedders adjustable IFS','Separate shower & toilet','Arana instant hot water','3000W inverter','Thetford 175L fridge','265/75R16 tyres'] },
   'Falcon 16HL': { solar_watts:600, solar_brand:'Renogy', battery_ah:400, battery_type:'1×400Ah Lithium', bms:'Renogy', water_tank_l:160, grey_water_l:80, length_mm:7392, tare_kg:2260, atm_kg:3000, price_from:'$75,990', ensuite:'Separate', hot_water:'Arana Instant', inverter_w:3000, suspension:'Adjustable IFS', tyre:'265/75R16', fridge:'Arana 157L', key_features:['Hard lid configuration','Full composite construction','Separate shower & toilet','Arana instant hot water','3000W inverter','265/75R16 tyres'] },
   'Falcon 17C': { solar_watts:600, solar_brand:'Renogy', battery_ah:400, battery_type:'1×400Ah Lithium', bms:'Renogy', water_tank_l:160, grey_water_l:80, length_mm:7710, tare_kg:2500, atm_kg:3000, price_from:'$79,990', ensuite:'Separate', hot_water:'Arana Instant', inverter_w:3000, suspension:'Pedders Adjustable IFS', tyre:'265/75R16', fridge:'Thetford 175L', key_features:['Club lounge floorplan','Separate shower & toilet','Composite construction','Arana instant hot water','3000W inverter','Thetford 175L fridge'] },
@@ -1788,7 +1790,7 @@ function renderComparison() {
   const container = document.getElementById('crCompareResult');
   if (!container) return;
 
-  const mavSpecs = mavVal ? MAVERICK_SPECS[mavVal] : null;
+  const mavSpecs = mavVal ? { solar_panel_type:'Rigid Glass Monocrystalline', solar_mounting:'Raised on aluminium brackets (airflow gap)', solar_brand:'Renogy', ...MAVERICK_SPECS[mavVal] } : null;
   const comps = ['crComp1','crComp2','crComp3'].map(getCompModel).filter(Boolean);
 
   if (!mavVal || comps.length === 0) {
@@ -1801,7 +1803,17 @@ function renderComparison() {
 
   const specs = [
     { label:'💰 Price', get: s => s?.price_from||'POA', mavGet: m => m.price_from||'POA', num:false },
-    { label:'☀️ Solar', get: s => s?.solar_watts ? s.solar_watts+'W' : '—', mavGet: m => m.solar_watts ? m.solar_watts+'W'+(m.solar_brand?' — '+m.solar_brand:'') : '—', numKey:'solar_watts', higher:true },
+    { label:'☀️ Solar Capacity', get: s => s?.solar_watts ? s.solar_watts+'W' : '—', mavGet: m => m.solar_watts ? m.solar_watts+'W'+(m.solar_brand?' — '+m.solar_brand:'') : '—', numKey:'solar_watts', higher:true },
+    { label:'🔆 Panel Type', get: s => s?.solar_panel_type||'—', mavGet: m => m.solar_panel_type||'—', num:false,
+      highlight: (mavVal, compVal) => {
+        const mavGood = mavVal?.includes('Monocrystalline') || mavVal?.includes('Glass');
+        const compFlex = compVal?.includes('Flexible') || compVal?.includes('flexible');
+        return compFlex ? 'mav' : null; // highlight Maverick advantage when competitor is flexible
+      }
+    },
+    { label:'🔩 Panel Mounting', get: s => s?.solar_mounting||'—', mavGet: m => m.solar_mounting||'—', num:false,
+      highlight: (mavVal, compVal) => mavVal?.includes('bracket') && !compVal?.includes('bracket') ? 'mav' : null
+    },
     { label:'🔋 Battery', get: s => s?.battery_ah ? s.battery_ah+'Ah' : '—', mavGet: m => m.battery_ah ? m.battery_ah+'Ah' : '—', numKey:'battery_ah', higher:true },
     { label:'⚡ Battery Type', get: s => s?.battery_type||'—', mavGet: m => m.battery_type||'—', num:false },
     { label:'🛡️ BMS', get: s => s?.bms||'—', mavGet: m => m.bms||'—', num:false },
@@ -1836,16 +1848,24 @@ function renderComparison() {
     const mavVal2 = mavSpecs ? spec.mavGet(mavSpecs) : '—';
     const mavNum = mavSpecs && spec.numKey ? mavSpecs[spec.numKey] : null;
     const numInfo = spec.numKey ? getBest(spec.numKey) : null;
-    const mavBg = cellBg(mavNum, numInfo);
     const mavTitleAttr = spec.mavTitle ? `title="${ensuiteTitle(mavSpecs?.ensuite)}"` : '';
 
     const compCells = comps.map(c => {
       const val = spec.get(c.model);
       const num = spec.numKey ? c.model[spec.numKey] : null;
-      const bg = cellBg(num, numInfo);
+      let bg = cellBg(num, numInfo);
+      // highlight function: returns 'mav' if Maverick has advantage, null otherwise
+      if (!bg && spec.highlight) {
+        const winner = spec.highlight(mavVal2, val);
+        if (winner === 'mav') bg = 'background:rgba(239,68,68,.05)'; // subtle red on comp when Mav wins
+      }
       const titleAttr = spec.title ? `title="${ensuiteTitle(c.model.ensuite)}"` : '';
       return `<td style="padding:9px 12px;font-size:13px;border-bottom:1px solid var(--brd);${bg}" ${titleAttr}>${esc(String(val))}</td>`;
     }).join('');
+
+    let mavBg = cellBg(mavNum, numInfo);
+    if (!mavBg && spec.highlight && comps.some(c => spec.highlight(mavVal2, spec.get(c.model)) === 'mav'))
+      mavBg = 'background:rgba(16,185,129,.1)'; // green on Maverick when it wins
 
     return `<tr>
       <td style="padding:9px 12px;font-size:12px;font-weight:700;color:var(--mut2);border-bottom:1px solid var(--brd);white-space:nowrap;background:var(--bg)">${spec.label}</td>
