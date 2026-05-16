@@ -228,6 +228,8 @@ try { db.exec("ALTER TABLE roster_shifts ADD COLUMN position_id INTEGER"); } cat
 try { db.exec("ALTER TABLE users ADD COLUMN mfa_secret TEXT"); } catch(e) {}
 try { db.exec("ALTER TABLE users ADD COLUMN mfa_enabled INTEGER DEFAULT 0"); } catch(e) {}
 try { db.exec("ALTER TABLE users ADD COLUMN email TEXT"); } catch(e) {}
+try { db.exec("ALTER TABLE competitor_models ADD COLUMN ensuite TEXT"); } catch(e) {}
+try { db.exec("ALTER TABLE competitor_models ADD COLUMN grey_water_l INTEGER"); } catch(e) {}
 db.exec(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -1179,9 +1181,35 @@ ${maverickContext}`,
 });
 
 // ---- COMPETITOR DATA SEED ----
+// Update ensuite + grey_water on existing records if columns just added
+try {
+  const ensuiteMap = {
+    'XT17HRT+ MKIII Family':'Separate','XT19HRT MKIII':'Separate','XT16HR Island MKIII':'Separate',
+    'Tanami X15 Series 3':'Separate','Tanami X13 Hybrid':'Combo',
+    'Stirling GT MK3':'Combo','Parkes 15 Quad MK4':'Combo','VZ5400 HR Premium Hard Top':'Separate',
+    'Scout-17 Gen3 Off-Road':'Separate','Scout-19 Off-Road':'Separate','SC-FF6 Camper Trailer':'Combo',
+    'Infinity 15':'Separate','Sirocco Grande':'Separate','Stealth 16':'Separate',
+    'Warrior 15 Off-Road Hybrid':'Combo','Warrior 13 Off-Road Hybrid':'Combo',
+    'Iridium 15 GEN II Hybrid':'Combo','Marlu Hybrid':'Separate',
+    'Mars 15 Premium MKII':'Combo','Venus 17HR Off-Road':'Combo',
+    'Frost 13 Off-Road Hybrid':'Combo','Glacier 14 (2026)':'Combo','Glacier 16 Double Bunk':'Combo',
+    'Venture 15S Pop-Top Hybrid':'Combo','Tourer 16HT Hard-Top Hybrid':'Separate','Tourer 18HT3 Hard-Top Family':'Separate',
+  };
+  Object.entries(ensuiteMap).forEach(([name,val]) => db.prepare('UPDATE competitor_models SET ensuite=? WHERE name=? AND ensuite IS NULL').run(val,name));
+  // Fix BMS to show manufacturer name
+  const bmsMap = {
+    'XT17HRT+ MKIII Family':'Redarc Manager 30','XT19HRT MKIII':'Redarc Manager 30','XT16HR Island MKIII':'Redarc Manager 30',
+    'Tanami X15 Series 3':'Renogy REGO','Tanami X13 Hybrid':'Renogy REGO',
+    'Stirling GT MK3':'Victron','Parkes 15 Quad MK4':'Victron','VZ5400 HR Premium Hard Top':'Victron',
+    'Warrior 15 Off-Road Hybrid':'Projecta','Warrior 13 Off-Road Hybrid':'Projecta',
+    'SC-FF6 Camper Trailer':'Projecta','Scout-17 Gen3 Off-Road':'Projecta','Scout-19 Off-Road':'Projecta',
+  };
+  Object.entries(bmsMap).forEach(([name,val]) => db.prepare('UPDATE competitor_models SET bms=? WHERE name=? AND (bms IS NULL OR bms=\'Yes\')').run(val,name));
+} catch(e) {}
+
 if (!db.prepare('SELECT id FROM competitors LIMIT 1').get()) {
   const insertComp = db.prepare('INSERT INTO competitors (name,website,description,sort_order) VALUES (?,?,?,?)');
-  const insertModel = db.prepare('INSERT INTO competitor_models (competitor_id,name,category,price_from,solar_watts,battery_ah,battery_type,bms,water_tank_l,length_ft,tare_kg,atm_kg,key_features,comparable_maverick) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+  const insertModel = db.prepare('INSERT INTO competitor_models (competitor_id,name,category,price_from,solar_watts,battery_ah,battery_type,bms,water_tank_l,length_ft,tare_kg,atm_kg,key_features,comparable_maverick,ensuite) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
 
   const seedData = [
     { name:'MDC Caravans', website:'https://mdccaravans.com.au', description:'Market Direct Campers (MDC) is one of Australia\'s largest off-road caravan and camper trailer brands. Known for aggressive off-grid power systems and heavy-duty construction at competitive price points.', sort:1, models:[
@@ -1235,7 +1263,7 @@ if (!db.prepare('SELECT id FROM competitors LIMIT 1').get()) {
   const seedTx = db.transaction(() => {
     seedData.forEach(c => {
       const comp = insertComp.run(c.name, c.website, c.description, c.sort);
-      c.models.forEach(m => insertModel.run(comp.lastInsertRowid, m.name, m.cat, m.price||null, m.solar||null, m.bat||null, m.batType||null, m.bms||null, m.water||null, m.len||null, m.tare||null, m.atm||null, JSON.stringify(m.features), m.mav||null));
+      c.models.forEach(m => insertModel.run(comp.lastInsertRowid, m.name, m.cat, m.price||null, m.solar||null, m.bat||null, m.batType||null, m.bms||null, m.water||null, m.len||null, m.tare||null, m.atm||null, JSON.stringify(m.features), m.mav||null, m.ensuite||null));
     });
   });
   seedTx();
