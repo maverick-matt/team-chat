@@ -1790,7 +1790,7 @@ function renderComparison() {
   const container = document.getElementById('crCompareResult');
   if (!container) return;
 
-  const mavSpecs = mavVal ? { solar_panel_type:'Rigid Glass Monocrystalline', solar_mounting:'Raised on aluminium brackets (airflow gap)', solar_brand:'Renogy', ...MAVERICK_SPECS[mavVal] } : null;
+  const mavSpecs = mavVal ? { solar_panel_type:'Rigid Glass Monocrystalline', solar_mounting:'Aluminium brackets — raised for airflow', solar_brand:'Renogy', ...MAVERICK_SPECS[mavVal] } : null;
   const comps = ['crComp1','crComp2','crComp3'].map(getCompModel).filter(Boolean);
 
   if (!mavVal || comps.length === 0) {
@@ -1806,14 +1806,12 @@ function renderComparison() {
     { label:'☀️ Solar Capacity', get: s => s?.solar_watts ? s.solar_watts+'W' : '—', mavGet: m => m.solar_watts ? m.solar_watts+'W'+(m.solar_brand?' — '+m.solar_brand:'') : '—', numKey:'solar_watts', higher:true },
     { label:'🔆 Panel Type', get: s => s?.solar_panel_type||'—', mavGet: m => m.solar_panel_type||'—', num:false,
       highlight: (mavVal, compVal) => {
-        const mavGood = mavVal?.includes('Monocrystalline') || mavVal?.includes('Glass');
-        const compFlex = compVal?.includes('Flexible') || compVal?.includes('flexible');
-        return compFlex ? 'mav' : null; // highlight Maverick advantage when competitor is flexible
+        // Maverick advantage only when competitor uses flexible/semi-flexible panels
+        const compFlex = compVal?.includes('Flexible') || compVal?.includes('Semi-Flexible');
+        return compFlex ? 'mav' : null;
       }
     },
-    { label:'🔩 Panel Mounting', get: s => s?.solar_mounting||'—', mavGet: m => m.solar_mounting||'—', num:false,
-      highlight: (mavVal, compVal) => mavVal?.includes('bracket') && !compVal?.includes('bracket') ? 'mav' : null
-    },
+    { label:'🔩 Panel Mounting', get: s => s?.solar_mounting||'—', mavGet: m => m.solar_mounting||'—', num:false },
     { label:'🔋 Battery', get: s => s?.battery_ah ? s.battery_ah+'Ah' : '—', mavGet: m => m.battery_ah ? m.battery_ah+'Ah' : '—', numKey:'battery_ah', higher:true },
     { label:'⚡ Battery Type', get: s => s?.battery_type||'—', mavGet: m => m.battery_type||'—', num:false },
     { label:'🛡️ BMS', get: s => s?.bms||'—', mavGet: m => m.bms||'—', num:false },
